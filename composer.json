@@ -1,0 +1,22 @@
+{
+    "name": "rcalicdan/gemini-client",
+    "description": "Asynchonous Gemini Client for PHP",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Rcalicdan\\GeminiClient\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Reymart A. Calicdan"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "hiblaphp/http-client": "dev-main"
+    }
+}
