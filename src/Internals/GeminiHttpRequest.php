@@ -45,7 +45,7 @@ class GeminiHttpRequest
     }
 
     /**
-     * Make a streaming SSE request.
+     * Make a raw streaming SSE request.
      *
      * @param string $url
      * @param array<string, mixed> $payload
