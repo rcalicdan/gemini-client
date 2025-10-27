@@ -150,7 +150,7 @@ class GeminiClient
      * @param string|null $title Optional title for RETRIEVAL_DOCUMENT task
      * @return PromiseInterface<GeminiEmbeddingResponse>
      */
-    public function embed(
+    public function embedContent(
         string|array $content,
         string $taskType = 'RETRIEVAL_DOCUMENT',
         ?string $model = null,
@@ -199,12 +199,12 @@ class GeminiClient
         ?string $model = null
     ): PromiseInterface {
         return async(function() use ($query, $documents, $model) {
-            $queryResponse = await($this->embed($query, 'RETRIEVAL_QUERY', $model));
+            $queryResponse = await($this->embedContent($query, 'RETRIEVAL_QUERY', $model));
             $queryEmbedding = $queryResponse->values();
 
             $docPromises = [];
             foreach ($documents as $doc) {
-                $docPromises[] = $this->embed($doc, 'RETRIEVAL_DOCUMENT', $model);
+                $docPromises[] = $this->embedContent($doc, 'RETRIEVAL_DOCUMENT', $model);
             }
 
             $docResponses = await(Promise::all($docPromises));
