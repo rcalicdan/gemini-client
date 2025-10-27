@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcalicdan\GeminiClient;
+namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\Response;
 use Hibla\Promise\Interfaces\PromiseInterface;

@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcalicdan\GeminiClient;
+namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEResponse;
@@ -10,14 +10,15 @@ use Hibla\HttpClient\SSE\SSEResponse;
  */
 class GeminiStreamResponse
 {
-    private SSEResponse $response;
+    private SSEResponse $sseResponse;
     private GeminiRequestBuilder $builder;
     private string $fullText = '';
     private array $chunks = [];
+    private array $events = [];
 
-    public function __construct(SSEResponse $response, GeminiRequestBuilder $builder)
+    public function __construct(SSEResponse $sseResponse, GeminiRequestBuilder $builder)
     {
-        $this->response = $response;
+        $this->sseResponse = $sseResponse;
         $this->builder = $builder;
     }
 
@@ -26,7 +27,7 @@ class GeminiStreamResponse
      */
     public function raw(): SSEResponse
     {
-        return $this->response;
+        return $this->sseResponse;
     }
 
     /**
@@ -36,6 +37,14 @@ class GeminiStreamResponse
     {
         $this->fullText .= $chunk;
         $this->chunks[] = $chunk;
+    }
+
+    /**
+     * Add an event to the event history.
+     */
+    public function addEvent(SSEEvent $event): void
+    {
+        $this->events[] = $event;
     }
 
     /**
@@ -62,5 +71,57 @@ class GeminiStreamResponse
     public function chunkCount(): int
     {
         return count($this->chunks);
+    }
+
+    /**
+     * Get all SSE events received.
+     *
+     * @return array<SSEEvent>
+     */
+    public function events(): array
+    {
+        return $this->events;
+    }
+
+    /**
+     * Get the number of events received.
+     */
+    public function eventCount(): int
+    {
+        return count($this->events);
+    }
+
+    /**
+     * Get the last event ID.
+     */
+    public function lastEventId(): ?string
+    {
+        return $this->sseResponse->getLastEventId();
+    }
+
+    /**
+     * Get status code.
+     */
+    public function status(): int
+    {
+        return $this->sseResponse->status();
+    }
+
+    /**
+     * Get response headers.
+     *
+     * @return array<string, string|array<string>>
+     */
+    public function headers(): array
+    {
+        return $this->sseResponse->headers();
+    }
+
+    /**
+     * Check if response was successful.
+     */
+    public function successful(): bool
+    {
+        return $this->sseResponse->successful();
     }
 }

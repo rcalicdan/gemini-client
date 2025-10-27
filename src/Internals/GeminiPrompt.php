@@ -1,10 +1,12 @@
 <?php
 
-namespace Rcalicdan\GeminiClient;
+namespace Rcalicdan\GeminiClient\Internals;
 
+use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
+use Rcalicdan\GeminiClient\GeminiClient;
 
 /**
  * Fluent interface for building and executing Gemini prompts
@@ -120,18 +122,18 @@ class GeminiPrompt
      */
     public function send(): PromiseInterface
     {
-        return $this->client->generate($this->prompt, $this->options, $this->model);
+        return $this->client->generateContent($this->prompt, $this->options, $this->model);
     }
 
     /**
      * Execute with streaming.
      *
-     * @param callable(string): void $onChunk
+     * @param callable(string, SSEEvent): void $onChunk Callback receives text chunk and SSE event
      * @param SSEReconnectConfig|null $reconnectConfig
      * @return CancellablePromiseInterface<GeminiStreamResponse>
      */
     public function stream(callable $onChunk, ?SSEReconnectConfig $reconnectConfig = null): CancellablePromiseInterface
     {
-        return $this->client->streamGenerate($this->prompt, $onChunk, $this->options, $this->model, $reconnectConfig);
+        return $this->client->streamGenerateContent($this->prompt, $onChunk, $this->options, $this->model, $reconnectConfig);
     }
 }

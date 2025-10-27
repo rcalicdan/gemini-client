@@ -10,6 +10,12 @@ use Hibla\HttpClient\SSE\SSEResponse;
 use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
+use Rcalicdan\GeminiClient\Internals\GeminiEmbeddingResponse;
+use Rcalicdan\GeminiClient\Internals\GeminiPrompt;
+use Rcalicdan\GeminiClient\Internals\GeminiRequestBuilder;
+use Rcalicdan\GeminiClient\Internals\GeminiResponse;
+use Rcalicdan\GeminiClient\Internals\GeminiStreamResponse;
+use Throwable;
 
 use function Hibla\async;
 use function Hibla\await;
@@ -85,32 +91,30 @@ class GeminiClient
      * @param string|null $model Override default model
      * @return PromiseInterface<GeminiResponse>
      */
-    public function generate(
+    public function generateContent(
         string|array $prompt,
         array $options = [],
         ?string $model = null
     ): PromiseInterface {
-        $model ??= $this->model ?? 'gemini-1.5-pro';
+        $model ??= $this->model ?? 'gemini-2.0-flash';
         $payload = $this->builder->buildGenerationPayload($prompt, $options);
-        $url = $this->builder->buildModelUrl($model, 'generateContent');
+        $url = $this->builder->buildModelUrl($model, endpoint: 'generateContent');
 
         return $this->makeRequest($url, $payload)
-            ->then(
-                fn(Response $response) => new GeminiResponse($response, $this->builder)
-            );
+            ->then(fn(Response $response) => new GeminiResponse($response, $this->builder));
     }
 
     /**
-     * Generate content with streaming.
+     * Generate content with streaming using SSE.
      *
      * @param string|array<mixed> $prompt Text prompt or structured content
-     * @param callable(string): void $onChunk Callback for each text chunk
+     * @param callable(string, SSEEvent): void $onChunk Callback for each text chunk and event
      * @param array<string, mixed> $options Additional generation options
      * @param string|null $model Override default model
      * @param SSEReconnectConfig|null $reconnectConfig Custom reconnection config
      * @return CancellablePromiseInterface<GeminiStreamResponse>
      */
-    public function streamGenerate(
+    public function streamGenerateContent(
         string|array $prompt,
         callable $onChunk,
         array $options = [],
@@ -122,29 +126,13 @@ class GeminiClient
         $url = $this->builder->buildModelUrl($model, 'streamGenerateContent', ['alt' => 'sse']);
 
         $reconnectConfig ??= $this->defaultReconnectConfig;
-        $streamResponse = null;
 
         return $this->makeStreamRequest(
             $url,
             $payload,
-            function (SSEEvent $event) use ($onChunk, &$streamResponse) {
-                if ($event->isKeepAlive() || $event->data === null) {
-                    return;
-                }
-
-                $chunks = $this->builder->parseSSEData($event->data);
-                foreach ($chunks as $chunk) {
-                    if ($streamResponse !== null) {
-                        $streamResponse->addChunk($chunk);
-                    }
-                    $onChunk($chunk);
-                }
-            },
+            $onChunk,
             $reconnectConfig
-        )->then(function (SSEResponse $sseResponse) use (&$streamResponse) {
-            $streamResponse = new GeminiStreamResponse($sseResponse, $this->builder);
-            return $streamResponse;
-        });
+        );
     }
 
     // ==========================================
@@ -208,7 +196,7 @@ class GeminiClient
         array $documents,
         ?string $model = null
     ): PromiseInterface {
-        return async(function () use ($query, $documents, $model) {
+        return async(function() use ($query, $documents, $model) {
             $queryResponse = await($this->embed($query, 'RETRIEVAL_QUERY', $model));
             $queryEmbedding = $queryResponse->values();
 
@@ -223,7 +211,7 @@ class GeminiClient
             foreach ($docResponses as $index => $docResponse) {
                 $docEmbedding = $docResponse->values();
                 $similarity = $this->builder->cosineSimilarity($queryEmbedding, $docEmbedding);
-
+                
                 $results[] = [
                     'text' => $documents[$index],
                     'similarity' => $similarity,
@@ -346,24 +334,60 @@ class GeminiClient
      *
      * @param string $url
      * @param array<string, mixed> $payload
-     * @param callable $onEvent
+     * @param callable(string, SSEEvent): void $onChunk
      * @param SSEReconnectConfig $reconnectConfig
-     * @return CancellablePromiseInterface<SSEResponse>
+     * @return CancellablePromiseInterface<GeminiStreamResponse>
      */
     private function makeStreamRequest(
         string $url,
         array $payload,
-        callable $onEvent,
+        callable $onChunk,
         SSEReconnectConfig $reconnectConfig
     ): CancellablePromiseInterface {
+        $streamResponse = null;
+
         return Http::withJson($payload)
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(120)
-            ->accept('text/event-stream')
-            ->post($url)
-            ->then(function ($response) use ($onEvent, $reconnectConfig) {
-                return $response;
+            ->sseReconnect(
+                maxAttempts: $reconnectConfig->maxAttempts,
+                initialDelay: $reconnectConfig->initialDelay,
+                maxDelay: $reconnectConfig->maxDelay,
+                backoffMultiplier: $reconnectConfig->backoffMultiplier
+            )
+            ->sse(
+                $url,
+                onEvent: function(SSEEvent $event) use ($onChunk, &$streamResponse) {
+                    if ($event->isKeepAlive()) {
+                        return;
+                    }
+
+                    if ($event->data === null) {
+                        return;
+                    }
+
+                    $chunks = $this->builder->parseSSEData($event->data);
+                    
+                    foreach ($chunks as $chunk) {
+                        if ($streamResponse !== null) {
+                            $streamResponse->addChunk($chunk);
+                            $streamResponse->addEvent($event);
+                        }
+                        
+                        $onChunk($chunk, $event);
+                    }
+                },
+                onError: function(Throwable $error) use ($reconnectConfig) {
+                    if ($reconnectConfig->onReconnect !== null) {
+                        error_log("SSE Error: " . $error->getMessage());
+                    }
+                },
+                reconnectConfig: $reconnectConfig
+            )
+            ->then(function(SSEResponse $sseResponse) use (&$streamResponse) {
+                $streamResponse = new GeminiStreamResponse($sseResponse, $this->builder);
+                return $streamResponse;
             });
     }
 }
