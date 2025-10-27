@@ -18,6 +18,7 @@ use Rcalicdan\GeminiClient\Internals\GeminiStreamResponse;
 
 use function Hibla\async;
 use function Hibla\await;
+use function Rcalicdan\ConfigLoader\env;
 
 /**
  * Flexible Gemini API Client with support for generation, embeddings, and more.
@@ -36,12 +37,12 @@ class GeminiClient
      * @param string $apiKey Your Gemini API key
      * @param string|null $model Default model name (optional)
      */
-    public function __construct(string $apiKey, ?string $model = null)
+    public function __construct(?string $apiKey = null, ?string $model = null)
     {
-        $this->apiKey = $apiKey;
+        $this->apiKey = env('GEMINI_API_KEY', $apiKey);
         $this->model = $model;
         $this->builder = new GeminiRequestBuilder();
-        $this->httpClient = new GeminiHttpRequest($apiKey, $this->defaultHeaders, $this->builder);
+        $this->httpClient = new GeminiHttpRequest($this->apiKey, $this->defaultHeaders, $this->builder);
 
         $this->defaultReconnectConfig = new SSEReconnectConfig(
             enabled: true,

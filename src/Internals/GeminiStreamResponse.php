@@ -124,4 +124,40 @@ class GeminiStreamResponse
     {
         return $this->sseResponse->successful();
     }
+
+    /**
+     * Format a chunk as Server-Sent Event format.
+     */
+    public function formatAsSSE(string $chunk, ?string $eventType = null): string
+    {
+        $sse = '';
+
+        if ($eventType !== null) {
+            $sse .= "event: {$eventType}\n";
+        }
+
+        $sse .= "data: " . json_encode(['content' => $chunk]) . "\n\n";
+
+        return $sse;
+    }
+
+    /**
+     * Format the complete text as an SSE event.
+     */
+    public function formatCompleteAsSSE(?string $eventType = 'complete'): string
+    {
+        $sse = '';
+
+        if ($eventType !== null) {
+            $sse .= "event: {$eventType}\n";
+        }
+
+        $sse .= "data: " . json_encode([
+            'content' => $this->fullText,
+            'chunks' => count($this->chunks),
+            'status' => 'complete'
+        ]) . "\n\n";
+
+        return $sse;
+    }
 }
