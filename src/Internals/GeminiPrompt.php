@@ -29,8 +29,9 @@ class GeminiPrompt
      */
     public function model(string $model): self
     {
-        $this->model = $model;
-        return $this;
+        $clone = clone $this;
+        $clone->model = $model;
+        return $clone;
     }
 
     /**
@@ -40,8 +41,9 @@ class GeminiPrompt
      */
     public function config(array $config): self
     {
-        $this->options['generationConfig'] = $config;
-        return $this;
+        $clone = clone $this;
+        $clone->options['generationConfig'] = $config;
+        return $clone;
     }
 
     /**
@@ -51,8 +53,9 @@ class GeminiPrompt
      */
     public function safety(array $settings): self
     {
-        $this->options['safetySettings'] = $settings;
-        return $this;
+        $clone = clone $this;
+        $clone->options['safetySettings'] = $settings;
+        return $clone;
     }
 
     /**
@@ -62,10 +65,11 @@ class GeminiPrompt
      */
     public function system(string|array $instruction): self
     {
-        $this->options['systemInstruction'] = is_string($instruction)
+        $clone = clone $this;
+        $clone->options['systemInstruction'] = is_string($instruction)
             ? ['parts' => [['text' => $instruction]]]
             : $instruction;
-        return $this;
+        return $clone;
     }
 
     /**
@@ -75,8 +79,9 @@ class GeminiPrompt
      */
     public function tools(array $tools): self
     {
-        $this->options['tools'] = $tools;
-        return $this;
+        $clone = clone $this;
+        $clone->options['tools'] = $tools;
+        return $clone;
     }
 
     /**
@@ -84,8 +89,9 @@ class GeminiPrompt
      */
     public function temperature(float $temperature): self
     {
-        $this->options['generationConfig']['temperature'] = $temperature;
-        return $this;
+        $clone = clone $this;
+        $clone->options['generationConfig']['temperature'] = $temperature;
+        return $clone;
     }
 
     /**
@@ -93,8 +99,9 @@ class GeminiPrompt
      */
     public function maxTokens(int $maxTokens): self
     {
-        $this->options['generationConfig']['maxOutputTokens'] = $maxTokens;
-        return $this;
+        $clone = clone $this;
+        $clone->options['generationConfig']['maxOutputTokens'] = $maxTokens;
+        return $clone;
     }
 
     /**
@@ -102,8 +109,9 @@ class GeminiPrompt
      */
     public function topP(float $topP): self
     {
-        $this->options['generationConfig']['topP'] = $topP;
-        return $this;
+        $clone = clone $this;
+        $clone->options['generationConfig']['topP'] = $topP;
+        return $clone;
     }
 
     /**
@@ -111,8 +119,9 @@ class GeminiPrompt
      */
     public function topK(int $topK): self
     {
-        $this->options['generationConfig']['topK'] = $topK;
-        return $this;
+        $clone = clone $this;
+        $clone->options['generationConfig']['topK'] = $topK;
+        return $clone;
     }
 
     /**

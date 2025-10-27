@@ -6,16 +6,15 @@ use Hibla\HttpClient\Http;
 use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
-use Hibla\HttpClient\SSE\SSEResponse;
 use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Rcalicdan\GeminiClient\Internals\GeminiEmbeddingResponse;
+use Rcalicdan\GeminiClient\Internals\GeminiHttpRequest;
 use Rcalicdan\GeminiClient\Internals\GeminiPrompt;
 use Rcalicdan\GeminiClient\Internals\GeminiRequestBuilder;
 use Rcalicdan\GeminiClient\Internals\GeminiResponse;
 use Rcalicdan\GeminiClient\Internals\GeminiStreamResponse;
-use Throwable;
 
 use function Hibla\async;
 use function Hibla\await;
@@ -27,9 +26,11 @@ class GeminiClient
 {
     private string $apiKey;
     private ?string $model = null;
+    private ?string $embeddingModel = null;
     private ?SSEReconnectConfig $defaultReconnectConfig = null;
     private array $defaultHeaders = [];
     private GeminiRequestBuilder $builder;
+    private GeminiHttpRequest $httpClient;
 
     /**
      * @param string $apiKey Your Gemini API key
@@ -40,6 +41,7 @@ class GeminiClient
         $this->apiKey = $apiKey;
         $this->model = $model;
         $this->builder = new GeminiRequestBuilder();
+        $this->httpClient = new GeminiHttpRequest($apiKey, $this->defaultHeaders, $this->builder);
 
         $this->defaultReconnectConfig = new SSEReconnectConfig(
             enabled: true,
@@ -100,7 +102,7 @@ class GeminiClient
         $payload = $this->builder->buildGenerationPayload($prompt, $options);
         $url = $this->builder->buildModelUrl($model, endpoint: 'generateContent');
 
-        return $this->makeRequest($url, $payload)
+        return $this->httpClient->makeRequest($url, $payload)
             ->then(fn(Response $response) => new GeminiResponse($response, $this->builder));
     }
 
@@ -127,7 +129,7 @@ class GeminiClient
 
         $reconnectConfig ??= $this->defaultReconnectConfig;
 
-        return $this->makeStreamRequest(
+        return $this->httpClient->makeStreamRequest(
             $url,
             $payload,
             $onChunk,
@@ -154,11 +156,11 @@ class GeminiClient
         ?string $model = null,
         ?string $title = null
     ): PromiseInterface {
-        $model ??= 'text-embedding-004';
+        $model ??= $this->embeddingModel ?? 'text-embedding-004';
         $payload = $this->builder->buildEmbeddingPayload($content, $taskType, $title);
         $url = $this->builder->buildModelUrl($model, 'embedContent');
 
-        return $this->makeRequest($url, $payload)
+        return $this->httpClient->makeRequest($url, $payload)
             ->then(fn(Response $response) => new GeminiEmbeddingResponse($response, $this->builder));
     }
 
@@ -171,11 +173,11 @@ class GeminiClient
      */
     public function batchEmbed(array $requests, ?string $model = null): PromiseInterface
     {
-        $model ??= 'text-embedding-004';
+        $model ??= $this->embeddingModel ?? 'text-embedding-004';
         $payload = $this->builder->buildBatchEmbeddingPayload($requests, $model);
         $url = $this->builder->buildModelUrl($model, 'batchEmbedContents');
 
-        return $this->makeRequest($url, $payload)
+        return $this->httpClient->makeRequest($url, $payload)
             ->then(fn(Response $response) => new GeminiEmbeddingResponse($response, $this->builder));
     }
 
@@ -269,12 +271,22 @@ class GeminiClient
     // ==========================================
 
     /**
-     * Set default model.
+     * Set default model for generation.
      */
     public function withModel(string $model): self
     {
         $clone = clone $this;
         $clone->model = $model;
+        return $clone;
+    }
+
+    /**
+     * Set default model for embeddings.
+     */
+    public function withEmbeddingModel(string $model): self
+    {
+        $clone = clone $this;
+        $clone->embeddingModel = $model;
         return $clone;
     }
 
@@ -297,97 +309,23 @@ class GeminiClient
     {
         $clone = clone $this;
         $clone->defaultHeaders = array_merge($clone->defaultHeaders, $headers);
+        $clone->httpClient = new GeminiHttpRequest($clone->apiKey, $clone->defaultHeaders, $clone->builder);
         return $clone;
     }
 
     /**
-     * Get the current model name.
+     * Get the current generation model name.
      */
     public function getModelName(): ?string
     {
         return $this->model;
     }
 
-    // ==========================================
-    // PRIVATE HELPER METHODS
-    // ==========================================
-
     /**
-     * Make a standard HTTP request.
-     *
-     * @param string $url
-     * @param array<string, mixed> $payload
-     * @return PromiseInterface<Response>
+     * Get the current embedding model name.
      */
-    private function makeRequest(string $url, array $payload): PromiseInterface
+    public function getEmbeddingModelName(): ?string
     {
-        return Http::asJson()
-            ->withHeader('x-goog-api-key', $this->apiKey)
-            ->withHeaders($this->defaultHeaders)
-            ->timeout(60)
-            ->retry(3, 2.0, 2.0)
-            ->post($url, $payload);
-    }
-
-    /**
-     * Make a streaming SSE request.
-     *
-     * @param string $url
-     * @param array<string, mixed> $payload
-     * @param callable(string, SSEEvent): void $onChunk
-     * @param SSEReconnectConfig $reconnectConfig
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
-     */
-    private function makeStreamRequest(
-        string $url,
-        array $payload,
-        callable $onChunk,
-        SSEReconnectConfig $reconnectConfig
-    ): CancellablePromiseInterface {
-        $streamResponse = null;
-
-        return Http::withJson($payload)
-            ->withHeader('x-goog-api-key', $this->apiKey)
-            ->withHeaders($this->defaultHeaders)
-            ->timeout(120)
-            ->sseReconnect(
-                maxAttempts: $reconnectConfig->maxAttempts,
-                initialDelay: $reconnectConfig->initialDelay,
-                maxDelay: $reconnectConfig->maxDelay,
-                backoffMultiplier: $reconnectConfig->backoffMultiplier
-            )
-            ->sse(
-                $url,
-                onEvent: function(SSEEvent $event) use ($onChunk, &$streamResponse) {
-                    if ($event->isKeepAlive()) {
-                        return;
-                    }
-
-                    if ($event->data === null) {
-                        return;
-                    }
-
-                    $chunks = $this->builder->parseSSEData($event->data);
-                    
-                    foreach ($chunks as $chunk) {
-                        if ($streamResponse !== null) {
-                            $streamResponse->addChunk($chunk);
-                            $streamResponse->addEvent($event);
-                        }
-                        
-                        $onChunk($chunk, $event);
-                    }
-                },
-                onError: function(Throwable $error) use ($reconnectConfig) {
-                    if ($reconnectConfig->onReconnect !== null) {
-                        error_log("SSE Error: " . $error->getMessage());
-                    }
-                },
-                reconnectConfig: $reconnectConfig
-            )
-            ->then(function(SSEResponse $sseResponse) use (&$streamResponse) {
-                $streamResponse = new GeminiStreamResponse($sseResponse, $this->builder);
-                return $streamResponse;
-            });
+        return $this->embeddingModel;
     }
 }
