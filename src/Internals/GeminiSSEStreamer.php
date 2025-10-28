@@ -13,6 +13,7 @@ class GeminiSSEStreamer
     private int $chunkCount = 0;
     private int $totalLength = 0;
     private float $startTime;
+    private bool $completionEmitted = false;
 
     /**
      * @param array<string, mixed> $config SSE streaming configuration
@@ -49,6 +50,10 @@ class GeminiSSEStreamer
      */
     public function handleChunk(string $chunk, SSEEvent $event): void
     {
+        if (empty($chunk)) {
+            return;
+        }
+
         $this->chunkCount++;
         $this->totalLength += strlen($chunk);
 
@@ -64,6 +69,12 @@ class GeminiSSEStreamer
      */
     public function handleCompletion(): void
     {
+        if ($this->completionEmitted) {
+            return;
+        }
+
+        $this->completionEmitted = true;
+
         if ($this->config['doneEvent'] !== null) {
             $this->emitDoneEvent();
         }
@@ -193,5 +204,6 @@ class GeminiSSEStreamer
         $this->chunkCount = 0;
         $this->totalLength = 0;
         $this->startTime = microtime(true);
+        $this->completionEmitted = false;
     }
 }

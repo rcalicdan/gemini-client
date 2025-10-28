@@ -6,6 +6,7 @@ use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
+use Rcalicdan\Defer\Defer;
 use Rcalicdan\GeminiClient\GeminiClient;
 
 /**
@@ -213,7 +214,7 @@ class GeminiPrompt
     ): CancellablePromiseInterface {
         $streamer = new GeminiSSEStreamer($config);
 
-        return $this->client->streamGenerateContent(
+        $promise = $this->client->streamGenerateContent(
             $this->prompt,
             function (string $chunk, SSEEvent $event) use ($streamer) {
                 $streamer->handleChunk($chunk, $event);
@@ -221,13 +222,20 @@ class GeminiPrompt
             $this->options,
             $this->model,
             $reconnectConfig
-        )->then(function ($response) use ($streamer) {
-            $streamer->handleCompletion();
-            return $response;
-        })->catch(function (\Throwable $error) use ($streamer) {
-            $streamer->handleError($error);
-            throw $error;
-        });
+        );
+
+        return $promise
+            ->then(function ($response) use ($streamer) {
+                Defer::global(function () use ($streamer) {
+                    $streamer->handleCompletion();
+                });
+
+                return $response;
+            })
+            ->catch(function (\Throwable $error) use ($streamer) {
+                $streamer->handleError($error);
+                throw $error;
+            });
     }
 
     /**
