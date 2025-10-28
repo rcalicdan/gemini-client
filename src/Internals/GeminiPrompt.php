@@ -8,9 +8,6 @@ use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Rcalicdan\GeminiClient\GeminiClient;
 
-use function Hibla\async;
-use function Hibla\await;
-
 /**
  * Fluent interface for building and executing Gemini prompts
  */
@@ -214,119 +211,21 @@ class GeminiPrompt
         array $config = [],
         ?SSEReconnectConfig $reconnectConfig = null
     ): CancellablePromiseInterface {
-        // Default configuration
-        $messageEvent = $config['messageEvent'] ?? 'message';
-        $doneEvent = $config['doneEvent'] ?? 'done';
-        $errorEvent = $config['errorEvent'] ?? 'error';
-        $progressEvent = $config['progressEvent'] ?? null;
-        $includeMetadata = $config['includeMetadata'] ?? true;
-        $customMetadata = $config['customMetadata'] ?? [];
-        $onBeforeEmit = $config['onBeforeEmit'] ?? null;
+        $streamer = new GeminiSSEStreamer($config);
 
-        // Tracking variables
-        $chunkCount = 0;
-        $totalLength = 0;
-        $startTime = microtime(true);
-
-        // Use the underlying stream method which returns CancellablePromiseInterface
         return $this->client->streamGenerateContent(
             $this->prompt,
-            function (string $chunk, SSEEvent $event) use (
-                $messageEvent,
-                $progressEvent,
-                $includeMetadata,
-                $customMetadata,
-                $onBeforeEmit,
-                &$chunkCount,
-                &$totalLength,
-                &$startTime,
-                $doneEvent,
-                $errorEvent
-            ) {
-                $chunkCount++;
-                $totalLength += strlen($chunk);
-
-                // Build message event data
-                $data = ['content' => $chunk];
-
-                if ($includeMetadata) {
-                    $data['metadata'] = array_merge([
-                        'chunk' => $chunkCount,
-                        'length' => strlen($chunk),
-                        'totalLength' => $totalLength,
-                    ], $customMetadata);
-                }
-
-                // Allow modification before emission
-                if ($onBeforeEmit !== null) {
-                    $data = $onBeforeEmit($messageEvent, $data);
-                }
-
-                // Emit message event
-                $this->emitSSE($messageEvent, $data);
-
-                // Emit progress event if enabled
-                if ($progressEvent !== null) {
-                    $progressData = [
-                        'chunk' => $chunkCount,
-                        'totalChunks' => $chunkCount,
-                        'length' => $totalLength,
-                    ];
-
-                    if ($onBeforeEmit !== null) {
-                        $progressData = $onBeforeEmit($progressEvent, $progressData);
-                    }
-
-                    $this->emitSSE($progressEvent, $progressData);
-                }
+            function (string $chunk, SSEEvent $event) use ($streamer) {
+                $streamer->handleChunk($chunk, $event);
             },
             $this->options,
             $this->model,
             $reconnectConfig
-        )->then(function($response) use (
-            $doneEvent,
-            $includeMetadata,
-            $customMetadata,
-            $onBeforeEmit,
-            $chunkCount,
-            $totalLength,
-            $startTime
-        ) {
-            // Emit completion event if enabled
-            if ($doneEvent !== null) {
-                $duration = microtime(true) - $startTime;
-                
-                $data = ['status' => 'complete'];
-
-                if ($includeMetadata) {
-                    $data['metadata'] = array_merge([
-                        'chunks' => $chunkCount,
-                        'length' => $totalLength,
-                        'duration' => round($duration, 3),
-                    ], $customMetadata);
-                }
-
-                if ($onBeforeEmit !== null) {
-                    $data = $onBeforeEmit($doneEvent, $data);
-                }
-
-                $this->emitSSE($doneEvent, $data);
-            }
-
+        )->then(function ($response) use ($streamer) {
+            $streamer->handleCompletion();
             return $response;
-        })->catch(function(\Throwable $error) use ($errorEvent, $onBeforeEmit) {
-            // Emit error event
-            $data = [
-                'error' => 'Stream failed',
-                'message' => $error->getMessage(),
-            ];
-
-            if ($onBeforeEmit !== null) {
-                $data = $onBeforeEmit($errorEvent, $data);
-            }
-
-            $this->emitSSE($errorEvent, $data);
-
+        })->catch(function (\Throwable $error) use ($streamer) {
+            $streamer->handleError($error);
             throw $error;
         });
     }
@@ -390,92 +289,5 @@ class GeminiPrompt
             'doneEvent' => $doneEvent,
             'customMetadata' => $metadata,
         ]);
-    }
-
-    /**
-     * Legacy method: Stream with custom event type.
-     * 
-     * @deprecated Use streamWithEvents() instead
-     * @param string $eventType Event type name (e.g., 'message', 'token')
-     * @param bool $sendDoneEvent Send completion event
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
-     */
-    public function streamWithEvent(
-        string $eventType = 'message',
-        bool $sendDoneEvent = true
-    ): CancellablePromiseInterface {
-        return $this->streamWithEvents(
-            $eventType,
-            $sendDoneEvent ? 'done' : null,
-            false
-        );
-    }
-
-    /**
-     * Legacy method: Stream and auto-flush as SSE events.
-     * 
-     * @deprecated Use streamSSE() instead
-     * @param bool $sendDoneEvent Whether to send a 'done' event on completion
-     * @param string|null $doneEventName Custom name for completion event
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
-     */
-    public function streamAndFlush(
-        bool $sendDoneEvent = true,
-        ?string $doneEventName = 'done'
-    ): CancellablePromiseInterface {
-        return $this->streamSSE([
-            'doneEvent' => $sendDoneEvent ? $doneEventName : null,
-        ]);
-    }
-
-    /**
-     * Legacy method: Stream with progress updates (old implementation).
-     * 
-     * @deprecated Use streamWithProgress() instead
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
-     */
-    public function streamWithProgressUpdates(): CancellablePromiseInterface
-    {
-        return $this->streamWithProgress();
-    }
-
-    /**
-     * Legacy method: Execute with streaming and output as SSE events.
-     * 
-     * @deprecated Use streamSSE() instead
-     * @param callable(string): void $outputCallback Callback to output SSE formatted string
-     * @param SSEReconnectConfig|null $reconnectConfig
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
-     */
-    public function streamAsSSE(callable $outputCallback, ?SSEReconnectConfig $reconnectConfig = null): CancellablePromiseInterface
-    {
-        return $this->client->streamGenerateContent(
-            $this->prompt,
-            function (string $chunk, SSEEvent $event) use ($outputCallback) {
-                $sse = "event: message\n";
-                $sse .= "data: " . json_encode(['content' => $chunk]) . "\n\n";
-                $outputCallback($sse);
-            },
-            $this->options,
-            $this->model,
-            $reconnectConfig
-        );
-    }
-
-    /**
-     * Emit an SSE event with automatic flushing.
-     * 
-     * @param string $event Event name
-     * @param array<string, mixed> $data Event data
-     */
-    private function emitSSE(string $event, array $data): void
-    {
-        echo "event: {$event}\n";
-        echo "data: " . json_encode($data) . "\n\n";
-        
-        if (ob_get_level() > 0) {
-            ob_flush();
-        }
-        flush();
     }
 }
