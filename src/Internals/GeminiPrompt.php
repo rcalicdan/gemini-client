@@ -228,110 +228,106 @@ class GeminiPrompt
         $totalLength = 0;
         $startTime = microtime(true);
 
-        return async(function () use (
-            $messageEvent,
+        // Use the underlying stream method which returns CancellablePromiseInterface
+        return $this->client->streamGenerateContent(
+            $this->prompt,
+            function (string $chunk, SSEEvent $event) use (
+                $messageEvent,
+                $progressEvent,
+                $includeMetadata,
+                $customMetadata,
+                $onBeforeEmit,
+                &$chunkCount,
+                &$totalLength,
+                &$startTime,
+                $doneEvent,
+                $errorEvent
+            ) {
+                $chunkCount++;
+                $totalLength += strlen($chunk);
+
+                // Build message event data
+                $data = ['content' => $chunk];
+
+                if ($includeMetadata) {
+                    $data['metadata'] = array_merge([
+                        'chunk' => $chunkCount,
+                        'length' => strlen($chunk),
+                        'totalLength' => $totalLength,
+                    ], $customMetadata);
+                }
+
+                // Allow modification before emission
+                if ($onBeforeEmit !== null) {
+                    $data = $onBeforeEmit($messageEvent, $data);
+                }
+
+                // Emit message event
+                $this->emitSSE($messageEvent, $data);
+
+                // Emit progress event if enabled
+                if ($progressEvent !== null) {
+                    $progressData = [
+                        'chunk' => $chunkCount,
+                        'totalChunks' => $chunkCount,
+                        'length' => $totalLength,
+                    ];
+
+                    if ($onBeforeEmit !== null) {
+                        $progressData = $onBeforeEmit($progressEvent, $progressData);
+                    }
+
+                    $this->emitSSE($progressEvent, $progressData);
+                }
+            },
+            $this->options,
+            $this->model,
+            $reconnectConfig
+        )->then(function($response) use (
             $doneEvent,
-            $errorEvent,
-            $progressEvent,
             $includeMetadata,
             $customMetadata,
             $onBeforeEmit,
-            $reconnectConfig,
-            &$chunkCount,
-            &$totalLength,
-            &$startTime
+            $chunkCount,
+            $totalLength,
+            $startTime
         ) {
-            try {
-                $response = await($this->client->streamGenerateContent(
-                    $this->prompt,
-                    function (string $chunk, SSEEvent $event) use (
-                        $messageEvent,
-                        $progressEvent,
-                        $includeMetadata,
-                        $customMetadata,
-                        $onBeforeEmit,
-                        &$chunkCount,
-                        &$totalLength
-                    ) {
-                        $chunkCount++;
-                        $totalLength += strlen($chunk);
+            // Emit completion event if enabled
+            if ($doneEvent !== null) {
+                $duration = microtime(true) - $startTime;
+                
+                $data = ['status' => 'complete'];
 
-                        // Build message event data
-                        $data = ['content' => $chunk];
-
-                        if ($includeMetadata) {
-                            $data['metadata'] = array_merge([
-                                'chunk' => $chunkCount,
-                                'length' => strlen($chunk),
-                                'totalLength' => $totalLength,
-                            ], $customMetadata);
-                        }
-
-                        // Allow modification before emission
-                        if ($onBeforeEmit !== null) {
-                            $data = $onBeforeEmit($messageEvent, $data);
-                        }
-
-                        // Emit message event
-                        $this->emitSSE($messageEvent, $data);
-
-                        // Emit progress event if enabled
-                        if ($progressEvent !== null) {
-                            $progressData = [
-                                'chunk' => $chunkCount,
-                                'totalChunks' => $chunkCount,
-                                'length' => $totalLength,
-                            ];
-
-                            if ($onBeforeEmit !== null) {
-                                $progressData = $onBeforeEmit($progressEvent, $progressData);
-                            }
-
-                            $this->emitSSE($progressEvent, $progressData);
-                        }
-                    },
-                    $this->options,
-                    $this->model,
-                    $reconnectConfig
-                ));
-
-                // Emit completion event if enabled
-                if ($doneEvent !== null) {
-                    $duration = microtime(true) - $startTime;
-                    
-                    $data = ['status' => 'complete'];
-
-                    if ($includeMetadata) {
-                        $data['metadata'] = array_merge([
-                            'chunks' => $chunkCount,
-                            'length' => $totalLength,
-                            'duration' => round($duration, 3),
-                        ], $customMetadata);
-                    }
-
-                    if ($onBeforeEmit !== null) {
-                        $data = $onBeforeEmit($doneEvent, $data);
-                    }
-
-                    $this->emitSSE($doneEvent, $data);
+                if ($includeMetadata) {
+                    $data['metadata'] = array_merge([
+                        'chunks' => $chunkCount,
+                        'length' => $totalLength,
+                        'duration' => round($duration, 3),
+                    ], $customMetadata);
                 }
-
-                return $response;
-            } catch (\Throwable $error) {
-                // Emit error event
-                $data = [
-                    'error' => 'Stream failed',
-                    'message' => $error->getMessage(),
-                ];
 
                 if ($onBeforeEmit !== null) {
-                    $data = $onBeforeEmit($errorEvent, $data);
+                    $data = $onBeforeEmit($doneEvent, $data);
                 }
 
-                $this->emitSSE($errorEvent, $data);
-
-                throw $error;
+                $this->emitSSE($doneEvent, $data);
             }
+
+            return $response;
+        })->catch(function(\Throwable $error) use ($errorEvent, $onBeforeEmit) {
+            // Emit error event
+            $data = [
+                'error' => 'Stream failed',
+                'message' => $error->getMessage(),
+            ];
+
+            if ($onBeforeEmit !== null) {
+                $data = $onBeforeEmit($errorEvent, $data);
+            }
+
+            $this->emitSSE($errorEvent, $data);
+
+            throw $error;
         });
     }
 
