@@ -2,12 +2,14 @@
 
 namespace Rcalicdan\GeminiClient;
 
+use Hibla\HttpClient\CacheConfig;
 use Hibla\HttpClient\Http;
 use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
+use Rcalicdan\GeminiClient\Internals\GeminiCache;
 use Rcalicdan\GeminiClient\Internals\GeminiEmbeddingResponse;
 use Rcalicdan\GeminiClient\Internals\GeminiHttpRequest;
 use Rcalicdan\GeminiClient\Internals\GeminiPrompt;
@@ -24,6 +26,7 @@ use function Rcalicdan\ConfigLoader\env;
  */
 class GeminiClient
 {
+    private ?string $cachePath = null;
     private string $apiKey;
     private ?string $model = null;
     private ?string $embeddingModel = null;
@@ -31,6 +34,8 @@ class GeminiClient
     private array $defaultHeaders = [];
     private GeminiRequestBuilder $builder;
     private GeminiHttpRequest $httpClient;
+    private ?CacheConfig $cacheConfig = null;
+    private bool $cacheEnabled = false;
 
     /**
      * @param string $apiKey Your Gemini API key
@@ -41,7 +46,12 @@ class GeminiClient
         $this->apiKey = env('GEMINI_API_KEY', $apiKey);
         $this->model = $model;
         $this->builder = new GeminiRequestBuilder();
-        $this->httpClient = new GeminiHttpRequest($this->apiKey, $this->defaultHeaders, $this->builder);
+        $this->httpClient = new GeminiHttpRequest(
+            $this->apiKey,
+            $this->defaultHeaders,
+            $this->builder,
+            $this->cacheConfig
+        );
 
         $this->defaultReconnectConfig = new SSEReconnectConfig(
             enabled: true,
@@ -198,7 +208,7 @@ class GeminiClient
         array $documents,
         ?string $model = null
     ): PromiseInterface {
-        return async(function() use ($query, $documents, $model) {
+        return async(function () use ($query, $documents, $model) {
             $queryResponse = await($this->embedContent($query, 'RETRIEVAL_QUERY', $model));
             $queryEmbedding = $queryResponse->values();
 
@@ -213,7 +223,7 @@ class GeminiClient
             foreach ($docResponses as $index => $docResponse) {
                 $docEmbedding = $docResponse->values();
                 $similarity = $this->builder->cosineSimilarity($queryEmbedding, $docEmbedding);
-                
+
                 $results[] = [
                     'text' => $documents[$index],
                     'similarity' => $similarity,
@@ -240,12 +250,18 @@ class GeminiClient
     {
         $url = $this->builder->buildModelsUrl();
 
-        return Http::asJson()
+        $request = Http::asJson()
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
-            ->retry(3, 1.0, 2.0)
-            ->get($url);
+            ->retry(3, 1.0, 2.0);
+
+        // Apply caching if configured
+        if ($this->cacheConfig !== null) {
+            $request = $request->cacheWith($this->cacheConfig);
+        }
+
+        return $request->get($url);
     }
 
     /**
@@ -258,12 +274,18 @@ class GeminiClient
     {
         $url = $this->builder->buildModelInfoUrl($model);
 
-        return Http::asJson()
+        $request = Http::asJson()
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
-            ->retry(3, 1.0, 2.0)
-            ->get($url);
+            ->retry(3, 1.0, 2.0);
+
+        // Apply caching if configured
+        if ($this->cacheConfig !== null) {
+            $request = $request->cacheWith($this->cacheConfig);
+        }
+
+        return $request->get($url);
     }
 
     // ==========================================
@@ -309,7 +331,12 @@ class GeminiClient
     {
         $clone = clone $this;
         $clone->defaultHeaders = array_merge($clone->defaultHeaders, $headers);
-        $clone->httpClient = new GeminiHttpRequest($clone->apiKey, $clone->defaultHeaders, $clone->builder);
+        $clone->httpClient = new GeminiHttpRequest(
+            $clone->apiKey,
+            $clone->defaultHeaders,
+            $clone->builder,
+            $clone->cacheConfig
+        );
         return $clone;
     }
 
@@ -327,5 +354,150 @@ class GeminiClient
     public function getEmbeddingModelName(): ?string
     {
         return $this->embeddingModel;
+    }
+
+    // ==========================================
+    // CACHE CONFIGURATION METHODS
+    // ==========================================
+
+    /**
+     * Set custom cache directory path
+     *
+     * @param string $path Directory path for cache storage
+     * @return self
+     */
+    public function withCachePath(string $path): self
+    {
+        $clone = clone $this;
+        $clone->cachePath = $path;
+
+        // Recreate http client with new cache path
+        if ($clone->cacheConfig !== null) {
+            $clone->httpClient = new GeminiHttpRequest(
+                $clone->apiKey,
+                $clone->defaultHeaders,
+                $clone->builder,
+                $clone->cacheConfig,
+                $clone->cachePath
+            );
+        }
+
+        return $clone;
+    }
+
+    /**
+     * Set global default cache path for all instances
+     *
+     * @param string $path Directory path for cache storage
+     */
+    public static function setGlobalCachePath(string $path): void
+    {
+        GeminiCache::setDefaultCachePath($path);
+    }
+
+    /**
+     * Enable caching for non-streaming requests.
+     *
+     * @param int $ttlSeconds Time to live in seconds (default: 3600 = 1 hour)
+     * @param bool $respectServerHeaders Whether to respect server's Cache-Control headers
+     * @return self
+     */
+    public function withCache(int $ttlSeconds = 3600, bool $respectServerHeaders = true): self
+    {
+        $clone = clone $this;
+        $clone->cacheEnabled = true;
+        $clone->cacheConfig = new CacheConfig($ttlSeconds, $respectServerHeaders);
+        $clone->httpClient = new GeminiHttpRequest(
+            $clone->apiKey,
+            $clone->defaultHeaders,
+            $clone->builder,
+            $clone->cacheConfig,
+            $clone->cachePath
+        );
+        return $clone;
+    }
+
+    /**
+     * Enable caching with a custom cache key.
+     *
+     * @param string $cacheKey Custom cache key
+     * @param int $ttlSeconds Time to live in seconds
+     * @param bool $respectServerHeaders Whether to respect server's Cache-Control headers
+     * @return self
+     */
+    public function withCacheKey(string $cacheKey, int $ttlSeconds = 3600, bool $respectServerHeaders = true): self
+    {
+        $clone = clone $this;
+        $clone->cacheEnabled = true;
+        $clone->cacheConfig = new CacheConfig($ttlSeconds, $respectServerHeaders, null, $cacheKey);
+        $clone->httpClient = new GeminiHttpRequest(
+            $clone->apiKey,
+            $clone->defaultHeaders,
+            $clone->builder,
+            $clone->cacheConfig,
+            $clone->cachePath
+        );
+        return $clone;
+    }
+
+    /**
+     * Enable caching with a custom CacheConfig object.
+     *
+     * @param CacheConfig $config Custom cache configuration
+     * @return self
+     */
+    public function withCacheConfig(CacheConfig $config): self
+    {
+        $clone = clone $this;
+        $clone->cacheEnabled = true;
+        $clone->cacheConfig = $config;
+        $clone->httpClient = new GeminiHttpRequest(
+            $clone->apiKey,
+            $clone->defaultHeaders,
+            $clone->builder,
+            $clone->cacheConfig,
+            $clone->cachePath
+        );
+        return $clone;
+    }
+
+    /**
+     * Disable caching for requests.
+     *
+     * @return self
+     */
+    public function withoutCache(): self
+    {
+        $clone = clone $this;
+        $clone->cacheEnabled = false;
+        $clone->cacheConfig = null;
+        $clone->httpClient = new GeminiHttpRequest(
+            $clone->apiKey,
+            $clone->defaultHeaders,
+            $clone->builder,
+            null,
+            $clone->cachePath
+        );
+        return $clone;
+    }
+
+    /**
+     * Get the current cache configuration.
+     *
+     * @return CacheConfig|null
+     */
+    public function getCacheConfig(): ?CacheConfig
+    {
+        return $this->cacheConfig;
+    }
+
+    /**
+     * Check if caching is enabled.
+     *
+     * @return bool
+     */
+    public function isCacheEnabled(): bool
+    {
+        return $this->cacheEnabled;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Rcalicdan\GeminiClient\Internals;
 
+use Hibla\HttpClient\CacheConfig;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
@@ -16,6 +17,7 @@ class GeminiPrompt
     private string|array $prompt;
     private array $options = [];
     private ?string $model = null;
+    private ?CacheConfig $cacheConfig = null;
 
     public function __construct(GeminiClient $client, string|array $prompt)
     {
@@ -169,14 +171,83 @@ class GeminiPrompt
         return $clone;
     }
 
+    // ==========================================
+    // CACHE METHODS
+    // ==========================================
+
+    /**
+     * Enable caching for this prompt.
+     *
+     * @param int $ttlSeconds Cache TTL in seconds (default: 3600 = 1 hour)
+     * @param bool $respectServerHeaders Respect server cache headers
+     * @return self
+     */
+    public function cache(int $ttlSeconds = 3600, bool $respectServerHeaders = true): self
+    {
+        $clone = clone $this;
+        $clone->cacheConfig = new CacheConfig($ttlSeconds, $respectServerHeaders);
+        return $clone;
+    }
+
+    /**
+     * Enable caching with a custom cache key.
+     *
+     * @param string $cacheKey Custom cache key
+     * @param int $ttlSeconds Cache TTL in seconds
+     * @param bool $respectServerHeaders Respect server cache headers
+     * @return self
+     */
+    public function cacheWithKey(string $cacheKey, int $ttlSeconds = 3600, bool $respectServerHeaders = true): self
+    {
+        $clone = clone $this;
+        $clone->cacheConfig = new CacheConfig($ttlSeconds, $respectServerHeaders, null, $cacheKey);
+        return $clone;
+    }
+
+    /**
+     * Enable caching with custom config.
+     *
+     * @param CacheConfig $config
+     * @return self
+     */
+    public function cacheWith(CacheConfig $config): self
+    {
+        $clone = clone $this;
+        $clone->cacheConfig = $config;
+        return $clone;
+    }
+
+    /**
+     * Disable caching for this prompt.
+     *
+     * @return self
+     */
+    public function noCache(): self
+    {
+        $clone = clone $this;
+        $clone->cacheConfig = null;
+        return $clone;
+    }
+
+    // ==========================================
+    // EXECUTION METHODS
+    // ==========================================
+
     /**
      * Execute the prompt and return a GeminiResponse.
+     * Uses caching if configured at prompt or client level.
      *
      * @return PromiseInterface<GeminiResponse>
      */
     public function send(): PromiseInterface
     {
-        return $this->client->generateContent($this->prompt, $this->options, $this->model);
+        // Apply prompt-level caching if set, otherwise use client-level
+        $client = $this->client;
+        if ($this->cacheConfig !== null) {
+            $client = $client->withCacheConfig($this->cacheConfig);
+        }
+
+        return $client->generateContent($this->prompt, $this->options, $this->model);
     }
 
     /**
