@@ -4,9 +4,7 @@ namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
-use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
-use Rcalicdan\Defer\Defer;
 use Rcalicdan\GeminiClient\GeminiClient;
 
 /**
@@ -186,9 +184,9 @@ class GeminiPrompt
      *
      * @param callable(string, SSEEvent): void $onChunk Callback receives text chunk and SSE event
      * @param SSEReconnectConfig|null $reconnectConfig
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
+     * @return PromiseInterface<GeminiStreamResponse>
      */
-    public function stream(callable $onChunk, ?SSEReconnectConfig $reconnectConfig = null): CancellablePromiseInterface
+    public function stream(callable $onChunk, ?SSEReconnectConfig $reconnectConfig = null): PromiseInterface
     {
         return $this->client->streamGenerateContent($this->prompt, $onChunk, $this->options, $this->model, $reconnectConfig);
     }
@@ -206,12 +204,12 @@ class GeminiPrompt
      *   - 'customMetadata' (array): Additional metadata to include in events
      *   - 'onBeforeEmit' (callable|null): Callback before emitting each event: fn(string $event, array $data): array
      * @param SSEReconnectConfig|null $reconnectConfig
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
+     * @return PromiseInterface<GeminiStreamResponse>
      */
     public function streamSSE(
         array $config = [],
         ?SSEReconnectConfig $reconnectConfig = null
-    ): CancellablePromiseInterface {
+    ): PromiseInterface {
         $streamer = new GeminiSSEStreamer($config);
 
         $promise = $this->client->streamGenerateContent(
@@ -226,7 +224,7 @@ class GeminiPrompt
 
         return $promise
             ->then(function ($response) use ($streamer) {
-                Defer::global(function () use ($streamer) {
+                register_shutdown_function(function () use ($streamer) {
                     $streamer->handleCompletion();
                 });
 
@@ -245,13 +243,13 @@ class GeminiPrompt
      * @param string $messageEvent Event name for message chunks
      * @param string|null $doneEvent Event name for completion (null to disable)
      * @param bool $includeMetadata Whether to include chunk/length metadata
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
+     * @return PromiseInterface<GeminiStreamResponse>
      */
     public function streamWithEvents(
         string $messageEvent = 'message',
         ?string $doneEvent = 'done',
         bool $includeMetadata = true
-    ): CancellablePromiseInterface {
+    ): PromiseInterface {
         return $this->streamSSE([
             'messageEvent' => $messageEvent,
             'doneEvent' => $doneEvent,
@@ -265,13 +263,13 @@ class GeminiPrompt
      * @param string $progressEvent Event name for progress updates
      * @param string $messageEvent Event name for message chunks
      * @param string|null $doneEvent Event name for completion
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
+     * @return PromiseInterface<GeminiStreamResponse>
      */
     public function streamWithProgress(
         string $progressEvent = 'progress',
         string $messageEvent = 'message',
         ?string $doneEvent = 'done'
-    ): CancellablePromiseInterface {
+    ): PromiseInterface {
         return $this->streamSSE([
             'messageEvent' => $messageEvent,
             'doneEvent' => $doneEvent,
@@ -285,13 +283,13 @@ class GeminiPrompt
      * @param array<string, mixed> $metadata Custom metadata to include
      * @param string $messageEvent Event name for message chunks
      * @param string|null $doneEvent Event name for completion
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
+     * @return PromiseInterface<GeminiStreamResponse>
      */
     public function streamWithMetadata(
         array $metadata,
         string $messageEvent = 'message',
         ?string $doneEvent = 'done'
-    ): CancellablePromiseInterface {
+    ): PromiseInterface {
         return $this->streamSSE([
             'messageEvent' => $messageEvent,
             'doneEvent' => $doneEvent,

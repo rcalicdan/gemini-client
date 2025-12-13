@@ -7,7 +7,6 @@ use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\HttpClient\SSE\SSEResponse;
-use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Throwable;
 
@@ -51,14 +50,14 @@ class GeminiHttpRequest
      * @param array<string, mixed> $payload
      * @param callable(string, SSEEvent): void $onChunk
      * @param SSEReconnectConfig $reconnectConfig
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
+     * @return PromiseInterface<GeminiStreamResponse>
      */
     public function makeStreamRequest(
         string $url,
         array $payload,
         callable $onChunk,
         SSEReconnectConfig $reconnectConfig
-    ): CancellablePromiseInterface {
+    ): PromiseInterface {
         $streamResponse = null;
 
         return Http::withJson($payload)

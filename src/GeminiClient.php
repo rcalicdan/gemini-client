@@ -6,7 +6,6 @@ use Hibla\HttpClient\Http;
 use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
-use Hibla\Promise\Interfaces\CancellablePromiseInterface;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Rcalicdan\GeminiClient\Internals\GeminiEmbeddingResponse;
@@ -115,7 +114,7 @@ class GeminiClient
      * @param array<string, mixed> $options Additional generation options
      * @param string|null $model Override default model
      * @param SSEReconnectConfig|null $reconnectConfig Custom reconnection config
-     * @return CancellablePromiseInterface<GeminiStreamResponse>
+     * @return PromiseInterface<GeminiStreamResponse>
      */
     public function streamGenerateContent(
         string|array $prompt,
@@ -123,7 +122,7 @@ class GeminiClient
         array $options = [],
         ?string $model = null,
         ?SSEReconnectConfig $reconnectConfig = null
-    ): CancellablePromiseInterface {
+    ): PromiseInterface {
         $model ??= $this->model ?? 'gemini-2.0-flash';
         $payload = $this->builder->buildGenerationPayload($prompt, $options);
         $url = $this->builder->buildModelUrl($model, 'streamGenerateContent', ['alt' => 'sse']);
