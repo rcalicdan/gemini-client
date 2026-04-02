@@ -61,7 +61,7 @@ class GeminiRequestBuilder
             ];
         } else {
             $payload['content'] = [
-                'parts' => array_map(fn ($text) => ['text' => $text], $content),
+                'parts' => array_map(fn($text) => ['text' => $text], $content),
             ];
         }
 
@@ -221,12 +221,17 @@ class GeminiRequestBuilder
             throw new \RuntimeException('Invalid response format');
         }
 
+        if (isset($data['error'])) {
+            $errorMessage = $data['error']['message'] ?? 'Unknown API error';
+            throw new \RuntimeException('API Error: ' . $errorMessage);
+        }
+
         if (isset($data['embedding']['values'])) {
             return $data['embedding']['values'];
         }
 
         if (isset($data['embeddings'])) {
-            return array_map(fn ($emb) => $emb['values'] ?? [], $data['embeddings']);
+            return array_map(fn($emb) => $emb['values'] ?? [], $data['embeddings']);
         }
 
         throw new \RuntimeException('No embeddings found in response');
