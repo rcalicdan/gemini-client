@@ -16,6 +16,7 @@ class GeminiEmbedding implements GeminiEmbeddingInterface
     private string $model;
     private string $taskType = 'RETRIEVAL_DOCUMENT';
     private ?string $title = null;
+    private ?int $outputDimensionality = null;
 
     public function __construct(
         GeminiHttpRequest $httpClient,
@@ -65,9 +66,25 @@ class GeminiEmbedding implements GeminiEmbeddingInterface
     /**
      * {@inheritDoc}
      */
+    public function outputDimensionality(int $dimensions): static
+    {
+        $clone = clone $this;
+        $clone->outputDimensionality = $dimensions;
+
+        return $clone;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     public function send(): PromiseInterface
     {
-        $payload = $this->builder->buildEmbeddingPayload($this->content, $this->taskType, $this->title);
+        $payload = $this->builder->buildEmbeddingPayload(
+            $this->content,
+            $this->taskType,
+            $this->title,
+            $this->outputDimensionality
+        );
         $url = $this->builder->buildModelUrl($this->model, 'embedContent');
 
         return $this->httpClient->makeRequest($url, $payload)

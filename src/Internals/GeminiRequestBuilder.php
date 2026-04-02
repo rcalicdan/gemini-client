@@ -44,12 +44,14 @@ class GeminiRequestBuilder
      * @param string|array<string> $content
      * @param string $taskType
      * @param string|null $title
+     * @param int|null $outputDimensionality
      * @return array<string, mixed>
      */
     public function buildEmbeddingPayload(
         string|array $content,
         string $taskType,
-        ?string $title = null
+        ?string $title = null,
+        ?int $outputDimensionality = null
     ): array {
         $payload = [
             'task_type' => $taskType,
@@ -69,6 +71,10 @@ class GeminiRequestBuilder
             $payload['title'] = $title;
         }
 
+        if ($outputDimensionality !== null) {
+            $payload['outputDimensionality'] = $outputDimensionality;
+        }
+
         return $payload;
     }
 
@@ -77,10 +83,14 @@ class GeminiRequestBuilder
      *
      * @param array<array{content: string, task_type?: string, title?: string}> $requests
      * @param string $defaultModel
+     * @param int|null $outputDimensionality
      * @return array<string, mixed>
      */
-    public function buildBatchEmbeddingPayload(array $requests, string $defaultModel): array
-    {
+    public function buildBatchEmbeddingPayload(
+        array $requests,
+        string $defaultModel,
+        ?int $outputDimensionality = null
+    ): array {
         $formattedRequests = [];
 
         foreach ($requests as $request) {
@@ -94,6 +104,10 @@ class GeminiRequestBuilder
 
             if (isset($request['title'])) {
                 $formattedRequest['title'] = $request['title'];
+            }
+
+            if ($outputDimensionality !== null) {
+                $formattedRequest['outputDimensionality'] = $outputDimensionality;
             }
 
             $formattedRequests[] = $formattedRequest;
@@ -269,10 +283,12 @@ class GeminiRequestBuilder
 
     /**
      * Calculate cosine similarity between two vectors.
+     * Automatically L2-normalizes both vectors first, making it safe
+     * for any outputDimensionality including reduced dimensions.
      *
      * @param array<float> $a
      * @param array<float> $b
-     * @return float
+     * @return float Value between -1.0 and 1.0 (1.0 = identical direction)
      */
     public function cosineSimilarity(array $a, array $b): float
     {
@@ -280,23 +296,33 @@ class GeminiRequestBuilder
             throw new \InvalidArgumentException('Vectors must have the same length');
         }
 
-        $dotProduct = 0.0;
-        $magnitudeA = 0.0;
-        $magnitudeB = 0.0;
+        $a = $this->l2Normalize($a);
+        $b = $this->l2Normalize($b);
 
+        $similarity = 0.0;
         for ($i = 0; $i < count($a); $i++) {
-            $dotProduct += $a[$i] * $b[$i];
-            $magnitudeA += $a[$i] * $a[$i];
-            $magnitudeB += $b[$i] * $b[$i];
+            $similarity += $a[$i] * $b[$i];
         }
 
-        $magnitudeA = sqrt($magnitudeA);
-        $magnitudeB = sqrt($magnitudeB);
+        return $similarity;
+    }
 
-        if ($magnitudeA == 0 || $magnitudeB == 0) {
-            return 0.0;
+    /**
+     * Normalize a vector to unit length (L2 normalization).
+     * Required before cosine similarity when using outputDimensionality < 3072,
+     * since the API only pre-normalizes full 3072-dimensional embeddings.
+     *
+     * @param array<float> $vector
+     * @return array<float>
+     */
+    public function l2Normalize(array $vector): array
+    {
+        $magnitude = sqrt(array_sum(array_map(fn($v) => $v * $v, $vector)));
+
+        if ($magnitude == 0.0) {
+            return $vector;
         }
 
-        return $dotProduct / ($magnitudeA * $magnitudeB);
+        return array_map(fn($v) => $v / $magnitude, $vector);
     }
 }

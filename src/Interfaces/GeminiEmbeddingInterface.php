@@ -24,6 +24,21 @@ interface GeminiEmbeddingInterface
     public function title(string $title): static;
 
     /**
+     * Set the output dimensionality of the embedding vector.
+     *
+     * Supported by gemini-embedding-001 and text-embedding-004.
+     * Uses Matryoshka Representation Learning (MRL) to truncate the output vector.
+     * Recommended values: 3072 (default/full), 1536, 768.
+     *
+     * Note: Only 3072-dimensional embeddings are pre-normalized by the API.
+     * If you use a smaller dimension, normalize the vector before computing
+     * cosine similarity or dot product.
+     *
+     * @param int $dimensions Target number of output dimensions (e.g., 768, 1536, 3072)
+     */
+    public function outputDimensionality(int $dimensions): static;
+
+    /**
      * Execute the embedding request.
      *
      * @return PromiseInterface<GeminiEmbeddingResponseInterface>

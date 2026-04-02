@@ -14,6 +14,7 @@ class GeminiBatchEmbedding implements GeminiBatchEmbeddingInterface
     private GeminiRequestBuilder $builder;
     private string $model;
     private array $requests = [];
+    private ?int $outputDimensionality = null;
 
     public function __construct(
         GeminiHttpRequest $httpClient,
@@ -32,6 +33,17 @@ class GeminiBatchEmbedding implements GeminiBatchEmbeddingInterface
     {
         $clone = clone $this;
         $clone->model = $model;
+
+        return $clone;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function outputDimensionality(int $dimensions): static
+    {
+        $clone = clone $this;
+        $clone->outputDimensionality = $dimensions;
 
         return $clone;
     }
@@ -62,7 +74,11 @@ class GeminiBatchEmbedding implements GeminiBatchEmbeddingInterface
             throw new \RuntimeException('Cannot send a batch embedding request without any items.');
         }
 
-        $payload = $this->builder->buildBatchEmbeddingPayload($this->requests, $this->model);
+        $payload = $this->builder->buildBatchEmbeddingPayload(
+            $this->requests,
+            $this->model,
+            $this->outputDimensionality
+        );
         $url = $this->builder->buildModelUrl($this->model, 'batchEmbedContents');
 
         return $this->httpClient->makeRequest($url, $payload)

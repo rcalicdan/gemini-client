@@ -88,7 +88,7 @@ class GeminiClient implements GeminiClientInterface
             $this->httpClient,
             $this->builder,
             $content,
-            $this->embeddingModel ?? 'text-embedding-004'
+            $this->embeddingModel ?? 'gemini-embedding-001'
         );
     }
 
@@ -100,7 +100,7 @@ class GeminiClient implements GeminiClientInterface
         return new GeminiBatchEmbedding(
             $this->httpClient,
             $this->builder,
-            $this->embeddingModel ?? 'text-embedding-004'
+            $this->embeddingModel ?? 'gemini-embedding-001'
         );
     }
 

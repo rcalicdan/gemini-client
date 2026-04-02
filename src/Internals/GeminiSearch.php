@@ -19,6 +19,7 @@ class GeminiSearch implements GeminiSearchInterface
     private string $query;
     private array $documents = [];
     private ?string $model = null;
+    private ?int $outputDimensionality = null;
 
     public function __construct(GeminiClientInterface $client, GeminiRequestBuilder $builder, string $query)
     {
@@ -52,6 +53,17 @@ class GeminiSearch implements GeminiSearchInterface
     /**
      * {@inheritDoc}
      */
+    public function outputDimensionality(int $dimensions): static
+    {
+        $clone = clone $this;
+        $clone->outputDimensionality = $dimensions;
+
+        return $clone;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     public function send(): PromiseInterface
     {
         if (empty($this->documents)) {
@@ -59,19 +71,33 @@ class GeminiSearch implements GeminiSearchInterface
         }
 
         return async(function () {
-            $queryBuilder = $this->client->embed($this->query)->taskType('RETRIEVAL_QUERY');
+            $queryBuilder = $this->client->embed($this->query)
+                ->taskType('RETRIEVAL_QUERY');
+
             if ($this->model !== null) {
                 $queryBuilder = $queryBuilder->model($this->model);
             }
+
+            if ($this->outputDimensionality !== null) {
+                $queryBuilder = $queryBuilder->outputDimensionality($this->outputDimensionality);
+            }
+
             $queryResponse = await($queryBuilder->send());
             $queryEmbedding = $queryResponse->values();
 
             $docPromises = [];
             foreach ($this->documents as $doc) {
-                $docBuilder = $this->client->embed($doc)->taskType('RETRIEVAL_DOCUMENT');
+                $docBuilder = $this->client->embed($doc)
+                    ->taskType('RETRIEVAL_DOCUMENT');
+
                 if ($this->model !== null) {
                     $docBuilder = $docBuilder->model($this->model);
                 }
+
+                if ($this->outputDimensionality !== null) {
+                    $docBuilder = $docBuilder->outputDimensionality($this->outputDimensionality);
+                }
+
                 $docPromises[] = $docBuilder->send();
             }
 
