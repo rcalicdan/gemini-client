@@ -1,13 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\Response;
+use Rcalicdan\GeminiClient\Interfaces\GeminiEmbeddingResponseInterface;
 
-/**
- * Wrapper for Gemini embedding responses
- */
-class GeminiEmbeddingResponse
+class GeminiEmbeddingResponse implements GeminiEmbeddingResponseInterface
 {
     private Response $response;
     private GeminiRequestBuilder $builder;
@@ -19,7 +19,7 @@ class GeminiEmbeddingResponse
     }
 
     /**
-     * Get the raw HTTP response.
+     * {@inheritDoc}
      */
     public function raw(): Response
     {
@@ -27,20 +27,19 @@ class GeminiEmbeddingResponse
     }
 
     /**
-     * Get the response as JSON array.
-     *
-     * @return array<string, mixed>
+     * {@inheritDoc}
      */
     public function json(): array
     {
         $data = $this->response->json();
-        
-        if (!is_array($data)) {
+
+        if (! is_array($data)) {
             throw new \RuntimeException('Invalid response format');
         }
 
         if (isset($data['error'])) {
             $errorMessage = $data['error']['message'] ?? 'Unknown API error';
+
             throw new \RuntimeException('API Error: ' . $errorMessage);
         }
 
@@ -48,9 +47,7 @@ class GeminiEmbeddingResponse
     }
 
     /**
-     * Get embedding values.
-     *
-     * @return array<float>|array<array<float>>
+     * {@inheritDoc}
      */
     public function values(): array
     {
@@ -58,9 +55,7 @@ class GeminiEmbeddingResponse
     }
 
     /**
-     * Alias for values() - get the embedding vector(s).
-     *
-     * @return array<float>|array<array<float>>
+     * {@inheritDoc}
      */
     public function embeddings(): array
     {

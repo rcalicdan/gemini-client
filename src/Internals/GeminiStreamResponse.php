@@ -1,14 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEResponse;
+use Rcalicdan\GeminiClient\Interfaces\GeminiStreamResponseInterface;
 
-/**
- * Wrapper for Gemini streaming responses
- */
-class GeminiStreamResponse
+class GeminiStreamResponse implements GeminiStreamResponseInterface
 {
     private SSEResponse $sseResponse;
     private GeminiRequestBuilder $builder;
@@ -23,7 +23,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get the raw SSE response.
+     * {@inheritDoc}
      */
     public function raw(): SSEResponse
     {
@@ -31,7 +31,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Add a chunk to the accumulated text.
+     * {@inheritDoc}
      */
     public function addChunk(string $chunk): void
     {
@@ -40,7 +40,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Add an event to the event history.
+     * {@inheritDoc}
      */
     public function addEvent(SSEEvent $event): void
     {
@@ -48,7 +48,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get the complete text accumulated from all chunks.
+     * {@inheritDoc}
      */
     public function text(): string
     {
@@ -56,9 +56,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get all individual chunks.
-     *
-     * @return array<string>
+     * {@inheritDoc}
      */
     public function chunks(): array
     {
@@ -66,7 +64,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get the number of chunks received.
+     * {@inheritDoc}
      */
     public function chunkCount(): int
     {
@@ -74,9 +72,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get all SSE events received.
-     *
-     * @return array<SSEEvent>
+     * {@inheritDoc}
      */
     public function events(): array
     {
@@ -84,7 +80,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get the number of events received.
+     * {@inheritDoc}
      */
     public function eventCount(): int
     {
@@ -92,7 +88,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get the last event ID.
+     * {@inheritDoc}
      */
     public function lastEventId(): ?string
     {
@@ -100,7 +96,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get status code.
+     * {@inheritDoc}
      */
     public function status(): int
     {
@@ -108,9 +104,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Get response headers.
-     *
-     * @return array<string, string|array<string>>
+     * {@inheritDoc}
      */
     public function headers(): array
     {
@@ -118,7 +112,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Check if response was successful.
+     * {@inheritDoc}
      */
     public function successful(): bool
     {
@@ -126,7 +120,7 @@ class GeminiStreamResponse
     }
 
     /**
-     * Format a chunk as Server-Sent Event format.
+     * {@inheritDoc}
      */
     public function formatAsSSE(string $chunk, ?string $eventType = null): string
     {
@@ -136,13 +130,13 @@ class GeminiStreamResponse
             $sse .= "event: {$eventType}\n";
         }
 
-        $sse .= "data: " . json_encode(['content' => $chunk]) . "\n\n";
+        $sse .= 'data: ' . json_encode(['content' => $chunk]) . "\n\n";
 
         return $sse;
     }
 
     /**
-     * Format the complete text as an SSE event.
+     * {@inheritDoc}
      */
     public function formatCompleteAsSSE(?string $eventType = 'complete'): string
     {
@@ -152,10 +146,10 @@ class GeminiStreamResponse
             $sse .= "event: {$eventType}\n";
         }
 
-        $sse .= "data: " . json_encode([
+        $sse .= 'data: ' . json_encode([
             'content' => $this->fullText,
             'chunks' => count($this->chunks),
-            'status' => 'complete'
+            'status' => 'complete',
         ]) . "\n\n";
 
         return $sse;

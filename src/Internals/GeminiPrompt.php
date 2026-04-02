@@ -1,370 +1,207 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Rcalicdan\GeminiClient\Internals;
 
-use Hibla\HttpClient\CacheConfig;
+use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
-use Rcalicdan\GeminiClient\GeminiClient;
+use Rcalicdan\GeminiClient\Interfaces\GeminiPromptInterface;
 
-/**
- * Fluent interface for building and executing Gemini prompts
- */
-class GeminiPrompt
+class GeminiPrompt implements GeminiPromptInterface
 {
-    private GeminiClient $client;
+    private GeminiHttpRequest $httpClient;
+    private GeminiRequestBuilder $builder;
     private string|array $prompt;
+    private string $model;
+    private SSEReconnectConfig $reconnectConfig;
     private array $options = [];
-    private ?string $model = null;
-    private ?CacheConfig $cacheConfig = null;
 
-    public function __construct(GeminiClient $client, string|array $prompt)
-    {
-        $this->client = $client;
+    public function __construct(
+        GeminiHttpRequest $httpClient,
+        GeminiRequestBuilder $builder,
+        string|array $prompt,
+        string $defaultModel,
+        SSEReconnectConfig $defaultReconnectConfig
+    ) {
+        $this->httpClient = $httpClient;
+        $this->builder = $builder;
         $this->prompt = $prompt;
+        $this->model = $defaultModel;
+        $this->reconnectConfig = $defaultReconnectConfig;
     }
 
     /**
-     * Set the model to use.
+     * {@inheritDoc}
      */
-    public function model(string $model): self
+    public function model(string $model): static
     {
         $clone = clone $this;
         $clone->model = $model;
+
         return $clone;
     }
 
     /**
-     * Set generation config.
-     *
-     * @param array<string, mixed> $config
+     * {@inheritDoc}
      */
-    public function config(array $config): self
-    {
-        $clone = clone $this;
-        $clone->options['generationConfig'] = $config;
-        return $clone;
-    }
-
-    /**
-     * Set safety settings.
-     *
-     * @param array<mixed> $settings
-     */
-    public function safety(array $settings): self
-    {
-        $clone = clone $this;
-        $clone->options['safetySettings'] = $settings;
-        return $clone;
-    }
-
-    /**
-     * Set system instruction.
-     *
-     * @param string|array<mixed> $instruction
-     */
-    public function system(string|array $instruction): self
+    public function system(string|array $instruction): static
     {
         $clone = clone $this;
         $clone->options['systemInstruction'] = is_string($instruction)
             ? ['parts' => [['text' => $instruction]]]
             : $instruction;
+
         return $clone;
     }
 
     /**
-     * Set tools.
-     *
-     * @param array<mixed> $tools
+     * {@inheritDoc}
      */
-    public function tools(array $tools): self
+    public function tools(array $tools): static
     {
         $clone = clone $this;
         $clone->options['tools'] = $tools;
+
         return $clone;
     }
 
     /**
-     * Set temperature.
+     * {@inheritDoc}
      */
-    public function temperature(float $temperature): self
+    public function temperature(float $temperature): static
     {
         $clone = clone $this;
         $clone->options['generationConfig']['temperature'] = $temperature;
+
         return $clone;
     }
 
     /**
-     * Set max tokens.
+     * {@inheritDoc}
      */
-    public function maxTokens(int $maxTokens): self
+    public function maxTokens(int $maxTokens): static
     {
         $clone = clone $this;
         $clone->options['generationConfig']['maxOutputTokens'] = $maxTokens;
+
         return $clone;
     }
 
     /**
-     * Set top-p sampling.
+     * {@inheritDoc}
      */
-    public function topP(float $topP): self
+    public function topP(float $topP): static
     {
         $clone = clone $this;
         $clone->options['generationConfig']['topP'] = $topP;
+
         return $clone;
     }
 
     /**
-     * Set top-k sampling.
+     * {@inheritDoc}
      */
-    public function topK(int $topK): self
+    public function topK(int $topK): static
     {
         $clone = clone $this;
         $clone->options['generationConfig']['topK'] = $topK;
+
         return $clone;
     }
 
     /**
-     * Quick preset: Creative writing
+     * {@inheritDoc}
      */
-    public function creative(): self
+    public function creative(): static
     {
         return $this->temperature(0.9)->topP(0.95);
     }
 
     /**
-     * Quick preset: Precise/factual responses
+     * {@inheritDoc}
      */
-    public function precise(): self
+    public function precise(): static
     {
         return $this->temperature(0.2)->topP(0.8);
     }
 
     /**
-     * Quick preset: Balanced
+     * {@inheritDoc}
      */
-    public function balanced(): self
+    public function balanced(): static
     {
         return $this->temperature(0.7)->topP(0.9);
     }
 
     /**
-     * Quick preset: Code generation
+     * {@inheritDoc}
      */
-    public function code(): self
+    public function code(): static
     {
         return $this->temperature(0.3)->topK(40);
     }
 
     /**
-     * Set multiple generation options at once
-     */
-    public function with(array $options): self
-    {
-        $clone = clone $this;
-        foreach ($options as $key => $value) {
-            if (method_exists($clone, $key)) {
-                $clone = $clone->$key($value);
-            }
-        }
-        return $clone;
-    }
-
-    // ==========================================
-    // CACHE METHODS
-    // ==========================================
-
-    /**
-     * Enable caching for this prompt.
-     *
-     * @param int $ttlSeconds Cache TTL in seconds (default: 3600 = 1 hour)
-     * @param bool $respectServerHeaders Respect server cache headers
-     * @return self
-     */
-    public function cache(int $ttlSeconds = 3600, bool $respectServerHeaders = true): self
-    {
-        $clone = clone $this;
-        $clone->cacheConfig = new CacheConfig($ttlSeconds, $respectServerHeaders);
-        return $clone;
-    }
-
-    /**
-     * Enable caching with a custom cache key.
-     *
-     * @param string $cacheKey Custom cache key
-     * @param int $ttlSeconds Cache TTL in seconds
-     * @param bool $respectServerHeaders Respect server cache headers
-     * @return self
-     */
-    public function cacheWithKey(string $cacheKey, int $ttlSeconds = 3600, bool $respectServerHeaders = true): self
-    {
-        $clone = clone $this;
-        $clone->cacheConfig = new CacheConfig($ttlSeconds, $respectServerHeaders, null, $cacheKey);
-        return $clone;
-    }
-
-    /**
-     * Enable caching with custom config.
-     *
-     * @param CacheConfig $config
-     * @return self
-     */
-    public function cacheWith(CacheConfig $config): self
-    {
-        $clone = clone $this;
-        $clone->cacheConfig = $config;
-        return $clone;
-    }
-
-    /**
-     * Disable caching for this prompt.
-     *
-     * @return self
-     */
-    public function noCache(): self
-    {
-        $clone = clone $this;
-        $clone->cacheConfig = null;
-        return $clone;
-    }
-
-    // ==========================================
-    // EXECUTION METHODS
-    // ==========================================
-
-    /**
-     * Execute the prompt and return a GeminiResponse.
-     * Uses caching if configured at prompt or client level.
-     *
-     * @return PromiseInterface<GeminiResponse>
+     * {@inheritDoc}
      */
     public function send(): PromiseInterface
     {
-        // Apply prompt-level caching if set, otherwise use client-level
-        $client = $this->client;
-        if ($this->cacheConfig !== null) {
-            $client = $client->withCacheConfig($this->cacheConfig);
-        }
+        $payload = $this->builder->buildGenerationPayload($this->prompt, $this->options);
+        $url = $this->builder->buildModelUrl($this->model, 'generateContent');
 
-        return $client->generateContent($this->prompt, $this->options, $this->model);
+        return $this->httpClient->makeRequest($url, $payload)
+            ->then(fn (Response $response) => new GeminiResponse($response, $this->builder))
+        ;
     }
 
     /**
-     * Execute with streaming (raw callback, no auto SSE).
-     *
-     * @param callable(string, SSEEvent): void $onChunk Callback receives text chunk and SSE event
-     * @param SSEReconnectConfig|null $reconnectConfig
-     * @return PromiseInterface<GeminiStreamResponse>
+     * {@inheritDoc}
      */
     public function stream(callable $onChunk, ?SSEReconnectConfig $reconnectConfig = null): PromiseInterface
     {
-        return $this->client->streamGenerateContent($this->prompt, $onChunk, $this->options, $this->model, $reconnectConfig);
+        $payload = $this->builder->buildGenerationPayload($this->prompt, $this->options);
+        $url = $this->builder->buildModelUrl($this->model, 'streamGenerateContent', ['alt' => 'sse']);
+
+        $config = $reconnectConfig ?? $this->reconnectConfig;
+
+        return $this->httpClient->makeStreamRequest($url, $payload, $onChunk, $config);
     }
 
     /**
-     * Stream with automatic SSE emission and flushing.
-     * Automatically emits 'message' events for chunks and 'done' event on completion.
-     * 
-     * @param array<string, mixed> $config Configuration options:
-     *   - 'messageEvent' (string): Event name for chunks (default: 'message')
-     *   - 'doneEvent' (string|null): Event name for completion (default: 'done', null to disable)
-     *   - 'errorEvent' (string): Event name for errors (default: 'error')
-     *   - 'progressEvent' (string|null): Event name for progress updates (default: null, set to enable)
-     *   - 'includeMetadata' (bool): Include metadata in events (default: true)
-     *   - 'customMetadata' (array): Additional metadata to include in events
-     *   - 'onBeforeEmit' (callable|null): Callback before emitting each event: fn(string $event, array $data): array
-     * @param SSEReconnectConfig|null $reconnectConfig
-     * @return PromiseInterface<GeminiStreamResponse>
+     * {@inheritDoc}
      */
-    public function streamSSE(
-        array $config = [],
-        ?SSEReconnectConfig $reconnectConfig = null
-    ): PromiseInterface {
+    public function streamSSE(array $config = [], ?SSEReconnectConfig $reconnectConfig = null): PromiseInterface
+    {
         $streamer = new GeminiSSEStreamer($config);
 
-        $promise = $this->client->streamGenerateContent(
-            $this->prompt,
+        return $this->stream(
             function (string $chunk, SSEEvent $event) use ($streamer) {
                 $streamer->handleChunk($chunk, $event);
             },
-            $this->options,
-            $this->model,
             $reconnectConfig
-        );
+        )->then(function ($response) use ($streamer) {
+            register_shutdown_function(fn () => $streamer->handleCompletion());
 
-        return $promise
-            ->then(function ($response) use ($streamer) {
-                register_shutdown_function(function () use ($streamer) {
-                    $streamer->handleCompletion();
-                });
+            return $response;
+        })->catch(function (\Throwable $error) use ($streamer) {
+            $streamer->handleError($error);
 
-                return $response;
-            })
-            ->catch(function (\Throwable $error) use ($streamer) {
-                $streamer->handleError($error);
-                throw $error;
-            });
+            throw $error;
+        });
     }
 
     /**
-     * Simplified streamSSE with just event names.
-     * Quick method for basic SSE streaming with custom event names.
-     * 
-     * @param string $messageEvent Event name for message chunks
-     * @param string|null $doneEvent Event name for completion (null to disable)
-     * @param bool $includeMetadata Whether to include chunk/length metadata
-     * @return PromiseInterface<GeminiStreamResponse>
+     * {@inheritDoc}
      */
-    public function streamWithEvents(
-        string $messageEvent = 'message',
-        ?string $doneEvent = 'done',
-        bool $includeMetadata = true
-    ): PromiseInterface {
+    public function streamWithEvents(string $messageEvent = 'message', ?string $doneEvent = 'done', bool $includeMetadata = true): PromiseInterface
+    {
         return $this->streamSSE([
             'messageEvent' => $messageEvent,
             'doneEvent' => $doneEvent,
             'includeMetadata' => $includeMetadata,
-        ]);
-    }
-
-    /**
-     * Stream with progress updates enabled.
-     * 
-     * @param string $progressEvent Event name for progress updates
-     * @param string $messageEvent Event name for message chunks
-     * @param string|null $doneEvent Event name for completion
-     * @return PromiseInterface<GeminiStreamResponse>
-     */
-    public function streamWithProgress(
-        string $progressEvent = 'progress',
-        string $messageEvent = 'message',
-        ?string $doneEvent = 'done'
-    ): PromiseInterface {
-        return $this->streamSSE([
-            'messageEvent' => $messageEvent,
-            'doneEvent' => $doneEvent,
-            'progressEvent' => $progressEvent,
-        ]);
-    }
-
-    /**
-     * Stream with custom metadata in all events.
-     * 
-     * @param array<string, mixed> $metadata Custom metadata to include
-     * @param string $messageEvent Event name for message chunks
-     * @param string|null $doneEvent Event name for completion
-     * @return PromiseInterface<GeminiStreamResponse>
-     */
-    public function streamWithMetadata(
-        array $metadata,
-        string $messageEvent = 'message',
-        ?string $doneEvent = 'done'
-    ): PromiseInterface {
-        return $this->streamSSE([
-            'messageEvent' => $messageEvent,
-            'doneEvent' => $doneEvent,
-            'customMetadata' => $metadata,
         ]);
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\Response;
@@ -55,11 +57,11 @@ class GeminiRequestBuilder
 
         if (is_string($content)) {
             $payload['content'] = [
-                'parts' => [['text' => $content]]
+                'parts' => [['text' => $content]],
             ];
         } else {
             $payload['content'] = [
-                'parts' => array_map(fn($text) => ['text' => $text], $content)
+                'parts' => array_map(fn ($text) => ['text' => $text], $content),
             ];
         }
 
@@ -85,7 +87,7 @@ class GeminiRequestBuilder
             $formattedRequest = [
                 'model' => 'models/' . $defaultModel,
                 'content' => [
-                    'parts' => [['text' => $request['content']]]
+                    'parts' => [['text' => $request['content']]],
                 ],
                 'task_type' => $request['task_type'] ?? 'RETRIEVAL_DOCUMENT',
             ];
@@ -118,7 +120,7 @@ class GeminiRequestBuilder
             $endpoint
         );
 
-        if (!empty($queryParams)) {
+        if (! empty($queryParams)) {
             $url .= '?' . http_build_query($queryParams);
         }
 
@@ -153,12 +155,13 @@ class GeminiRequestBuilder
     {
         $data = $response->json();
 
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             throw new \RuntimeException('Invalid response format');
         }
 
         if (isset($data['error'])) {
             $errorMessage = $data['error']['message'] ?? 'Unknown API error';
+
             throw new \RuntimeException('API Error: ' . $errorMessage);
         }
 
@@ -177,6 +180,7 @@ class GeminiRequestBuilder
                         $text .= $part['text'];
                     }
                 }
+
                 return $text;
             }
 
@@ -213,7 +217,7 @@ class GeminiRequestBuilder
     {
         $data = $response->json();
 
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             throw new \RuntimeException('Invalid response format');
         }
 
@@ -222,7 +226,7 @@ class GeminiRequestBuilder
         }
 
         if (isset($data['embeddings'])) {
-            return array_map(fn($emb) => $emb['values'] ?? [], $data['embeddings']);
+            return array_map(fn ($emb) => $emb['values'] ?? [], $data['embeddings']);
         }
 
         throw new \RuntimeException('No embeddings found in response');
@@ -238,8 +242,8 @@ class GeminiRequestBuilder
     {
         $chunks = [];
         $parsed = json_decode($data, true);
-        
-        if (!is_array($parsed)) {
+
+        if (! is_array($parsed)) {
             return $chunks;
         }
 

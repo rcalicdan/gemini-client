@@ -1,14 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\Response;
-use Hibla\Promise\Interfaces\PromiseInterface;
+use Rcalicdan\GeminiClient\Interfaces\GeminiResponseInterface;
 
-/**
- * Wrapper for Gemini API responses with convenient access methods
- */
-class GeminiResponse
+class GeminiResponse implements GeminiResponseInterface
 {
     private Response $response;
     private GeminiRequestBuilder $builder;
@@ -20,7 +19,7 @@ class GeminiResponse
     }
 
     /**
-     * Get the raw HTTP response.
+     * {@inheritDoc}
      */
     public function raw(): Response
     {
@@ -28,20 +27,19 @@ class GeminiResponse
     }
 
     /**
-     * Get the response as JSON array.
-     *
-     * @return array<string, mixed>
+     * {@inheritDoc}
      */
     public function json(): array
     {
         $data = $this->response->json();
-        
-        if (!is_array($data)) {
+
+        if (! is_array($data)) {
             throw new \RuntimeException('Invalid response format');
         }
 
         if (isset($data['error'])) {
             $errorMessage = $data['error']['message'] ?? 'Unknown API error';
+
             throw new \RuntimeException('API Error: ' . $errorMessage);
         }
 
@@ -49,7 +47,7 @@ class GeminiResponse
     }
 
     /**
-     * Extract text content from the response.
+     * {@inheritDoc}
      */
     public function text(): string
     {
@@ -57,7 +55,7 @@ class GeminiResponse
     }
 
     /**
-     * Get response status code.
+     * {@inheritDoc}
      */
     public function status(): int
     {
@@ -65,9 +63,7 @@ class GeminiResponse
     }
 
     /**
-     * Get response headers.
-     *
-     * @return array<string, string|array<string>>
+     * {@inheritDoc}
      */
     public function headers(): array
     {
@@ -75,7 +71,7 @@ class GeminiResponse
     }
 
     /**
-     * Check if response was successful.
+     * {@inheritDoc}
      */
     public function successful(): bool
     {
@@ -83,46 +79,43 @@ class GeminiResponse
     }
 
     /**
-     * Get the first candidate content.
-     *
-     * @return array<string, mixed>|null
+     * {@inheritDoc}
      */
     public function candidate(): ?array
     {
         $data = $this->json();
         $candidates = $data['candidates'] ?? [];
-        
+
         return $candidates[0] ?? null;
     }
 
     /**
-     * Get all candidates.
-     *
-     * @return array<array<string, mixed>>
+     * {@inheritDoc}
      */
     public function candidates(): array
     {
         $data = $this->json();
+
         return $data['candidates'] ?? [];
     }
 
     /**
-     * Get usage metadata.
-     *
-     * @return array<string, mixed>|null
+     * {@inheritDoc}
      */
     public function usage(): ?array
     {
         $data = $this->json();
+
         return $data['usageMetadata'] ?? null;
     }
 
     /**
-     * Get model version used.
+     * {@inheritDoc}
      */
     public function modelVersion(): ?string
     {
         $data = $this->json();
+
         return $data['modelVersion'] ?? null;
     }
 }

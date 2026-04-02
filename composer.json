@@ -16,9 +16,12 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "require": {
-        "php": "^8.2",
+        "php": "^8.4",
         "rcalicdan/config-loader": "^1.0",
         "hiblaphp/http-client": "dev-main",
         "hiblaphp/async": "dev-main"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.0"
     }
 }

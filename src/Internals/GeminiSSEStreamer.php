@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\SSE\SSEEvent;
@@ -167,14 +169,14 @@ class GeminiSSEStreamer
 
     /**
      * Emit an SSE event with automatic flushing.
-     * 
+     *
      * @param string $event Event name
      * @param array<string, mixed> $data Event data
      */
     private function emitSSE(string $event, array $data): void
     {
         echo "event: {$event}\n";
-        echo "data: " . json_encode($data) . "\n\n";
+        echo 'data: ' . json_encode($data) . "\n\n";
 
         if (ob_get_level() > 0) {
             ob_flush();
