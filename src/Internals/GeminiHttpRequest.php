@@ -72,7 +72,7 @@ class GeminiHttpRequest
             ->withHeaders($this->defaultHeaders)
             ->timeout(120)
             ->sse($url)
-            ->reconnectWith($reconnectConfig)
+            ->withReconnectConfig($reconnectConfig)
             ->onEvent(function (SSEEvent $event, SSEControlInterface $control) use ($onChunk, &$streamResponse) {
                 if ($event->isKeepAlive()) {
                     return;
@@ -95,7 +95,7 @@ class GeminiHttpRequest
             })
             ->onError(function (Throwable $error) use ($reconnectConfig) {
                 if ($reconnectConfig->onReconnect !== null) {
-                    error_log('SSE Error: ' . $error->getMessage());
+                    print('SSE Error: ' . $error->getMessage());
                 }
             })
             ->connect()
