@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Rcalicdan\GeminiClient\Internals;
 
-use Hibla\HttpClient\Http;
+use Hibla\HttpClient\Interfaces\HttpClientInterface;
 use Hibla\HttpClient\Interfaces\SSE\SSEControlInterface;
 use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
@@ -21,15 +21,18 @@ class GeminiHttpRequest
     private string $apiKey;
     private array $defaultHeaders;
     private GeminiRequestBuilder $builder;
+    private HttpClientInterface $client;
 
     public function __construct(
         string $apiKey,
         array $defaultHeaders,
-        GeminiRequestBuilder $builder
+        GeminiRequestBuilder $builder,
+        HttpClientInterface $client
     ) {
         $this->apiKey = $apiKey;
         $this->defaultHeaders = $defaultHeaders;
         $this->builder = $builder;
+        $this->client = $client;
     }
 
     /**
@@ -41,13 +44,13 @@ class GeminiHttpRequest
      */
     public function makeRequest(string $url, array $payload): PromiseInterface
     {
-        return Http::asJson()
+        return $this->client
+            ->asJson()
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(60)
             ->retry(3, 2.0, 2.0)
-            ->post($url, $payload)
-        ;
+            ->post($url, $payload);
     }
 
     /**
@@ -67,7 +70,8 @@ class GeminiHttpRequest
     ): PromiseInterface {
         $streamResponse = null;
 
-        return Http::withJson($payload)
+        return $this->client
+            ->withJson($payload)
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(120)
@@ -103,7 +107,6 @@ class GeminiHttpRequest
                 $streamResponse = new GeminiStreamResponse($sseResponse, $this->builder);
 
                 return $streamResponse;
-            })
-        ;
+            });
     }
 }

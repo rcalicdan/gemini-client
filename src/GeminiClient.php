@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rcalicdan\GeminiClient;
 
 use Hibla\HttpClient\Http;
+use Hibla\HttpClient\Interfaces\HttpClientInterface;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Rcalicdan\GeminiClient\Interfaces\GeminiBatchEmbeddingInterface;
@@ -30,16 +31,24 @@ class GeminiClient implements GeminiClientInterface
     private array $defaultHeaders = [];
     private GeminiHttpRequest $httpClient;
     public private(set) GeminiRequestBuilder $builder;
+    private HttpClientInterface $baseHttpClient;
 
-    public function __construct(?string $apiKey = null, ?string $model = null)
-    {
+    public function __construct(
+        ?string $apiKey = null, 
+        ?string $model = null,
+        ?HttpClientInterface $httpClient = null
+    ) {
         $this->apiKey = env('GEMINI_API_KEY', $apiKey);
         $this->model = $model;
         $this->builder = new GeminiRequestBuilder();
+        
+        $this->baseHttpClient = $httpClient ?? Http::client();
+        
         $this->httpClient = new GeminiHttpRequest(
             $this->apiKey,
             $this->defaultHeaders,
-            $this->builder
+            $this->builder,
+            $this->baseHttpClient
         );
 
         $this->defaultReconnectConfig = new SSEReconnectConfig(
@@ -119,13 +128,13 @@ class GeminiClient implements GeminiClientInterface
     {
         $url = $this->builder->buildModelsUrl();
 
-        return Http::asJson()
+        return $this->baseHttpClient
+            ->asJson()
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url)
-        ;
+            ->get($url);
     }
 
     /**
@@ -135,13 +144,13 @@ class GeminiClient implements GeminiClientInterface
     {
         $url = $this->builder->buildModelInfoUrl($model);
 
-        return Http::asJson()
+        return $this->baseHttpClient
+            ->asJson()
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url)
-        ;
+            ->get($url);
     }
 
     /**
@@ -184,10 +193,12 @@ class GeminiClient implements GeminiClientInterface
     {
         $clone = clone $this;
         $clone->defaultHeaders = array_merge($clone->defaultHeaders, $headers);
+        
         $clone->httpClient = new GeminiHttpRequest(
             $clone->apiKey,
             $clone->defaultHeaders,
-            $clone->builder
+            $clone->builder,
+            $clone->baseHttpClient
         );
 
         return $clone;
