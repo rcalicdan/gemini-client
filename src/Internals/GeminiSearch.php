@@ -72,7 +72,8 @@ class GeminiSearch implements GeminiSearchInterface
 
         return async(function () {
             $queryBuilder = $this->client->embed($this->query)
-                ->taskType('RETRIEVAL_QUERY');
+                ->taskType('RETRIEVAL_QUERY')
+            ;
 
             if ($this->model !== null) {
                 $queryBuilder = $queryBuilder->model($this->model);
@@ -88,7 +89,8 @@ class GeminiSearch implements GeminiSearchInterface
             $docPromises = [];
             foreach ($this->documents as $doc) {
                 $docBuilder = $this->client->embed($doc)
-                    ->taskType('RETRIEVAL_DOCUMENT');
+                    ->taskType('RETRIEVAL_DOCUMENT')
+                ;
 
                 if ($this->model !== null) {
                     $docBuilder = $docBuilder->model($this->model);

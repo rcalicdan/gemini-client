@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Rcalicdan\GeminiClient\Internals;
 
-use Hibla\HttpClient\Response;
+use Hibla\HttpClient\Interfaces\ResponseInterface;
 use Rcalicdan\GeminiClient\Interfaces\GeminiResponseInterface;
 
 class GeminiResponse implements GeminiResponseInterface
 {
-    private Response $response;
+    private ResponseInterface $response;
     private GeminiRequestBuilder $builder;
 
-    public function __construct(Response $response, GeminiRequestBuilder $builder)
+    public function __construct(ResponseInterface $response, GeminiRequestBuilder $builder)
     {
         $this->response = $response;
         $this->builder = $builder;
@@ -21,7 +21,7 @@ class GeminiResponse implements GeminiResponseInterface
     /**
      * {@inheritDoc}
      */
-    public function raw(): Response
+    public function raw(): ResponseInterface
     {
         return $this->response;
     }
@@ -29,13 +29,9 @@ class GeminiResponse implements GeminiResponseInterface
     /**
      * {@inheritDoc}
      */
-    public function json(): array
+    public function json(?string $key = null, mixed $default = null): mixed
     {
-        $data = $this->response->json();
-
-        if (! is_array($data)) {
-            throw new \RuntimeException('Invalid response format');
-        }
+        $data = $this->response->json($key, $default);
 
         if (isset($data['error'])) {
             $errorMessage = $data['error']['message'] ?? 'Unknown API error';

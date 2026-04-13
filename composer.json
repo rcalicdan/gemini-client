@@ -8,6 +8,11 @@
             "Rcalicdan\\GeminiClient\\": "src/"
         }
     },
+    "autoload-dev": {
+         "psr-4": {
+            "Test\\": "tests/"
+        }
+    },
     "authors": [
         {
             "name": "Reymart A. Calicdan"
@@ -18,10 +23,23 @@
     "require": {
         "php": "^8.4",
         "rcalicdan/config-loader": "^1.0",
-        "hiblaphp/http-client": "dev-main",
-        "hiblaphp/async": "dev-main"
+        "hiblaphp/http-client": "dev-main"
     },
     "require-dev": {
+        "hiblaphp/http-client-testing": "dev-main",
+        "pestphp/pest": "^4.0",
+        "phpstan/phpstan": "^2.1",
         "laravel/pint": "^1.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+     "scripts": {
+        "analyze": "./vendor/bin/phpstan analyse",
+        "format": "./vendor/bin/pint",
+        "format-test": "./vendor/bin/pint --test",
+        "test": "./vendor/bin/pest"
     }
 }

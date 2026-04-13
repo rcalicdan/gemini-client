@@ -6,6 +6,7 @@ namespace Rcalicdan\GeminiClient\Interfaces;
 
 use Hibla\HttpClient\Interfaces\ResponseInterface;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
+use Hibla\HttpClient\ValueObjects\RetryConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 
 interface GeminiClientInterface
@@ -53,6 +54,11 @@ interface GeminiClientInterface
      * Set default model for generation.
      */
     public function withModel(string $model): static;
+
+    /**
+     * Configure the retry behavior for the API.
+     */
+    public function withRetryConfig(RetryConfig $config): static;
 
     /**
      * Set default model for embeddings.

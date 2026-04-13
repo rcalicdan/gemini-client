@@ -10,6 +10,7 @@ use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\HttpClient\SSE\SSEResponse;
+use Hibla\HttpClient\ValueObjects\RetryConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Throwable;
 
@@ -18,22 +19,13 @@ use Throwable;
  */
 class GeminiHttpRequest
 {
-    private string $apiKey;
-    private array $defaultHeaders;
-    private GeminiRequestBuilder $builder;
-    private HttpClientInterface $client;
-
     public function __construct(
-        string $apiKey,
-        array $defaultHeaders,
-        GeminiRequestBuilder $builder,
-        HttpClientInterface $client
-    ) {
-        $this->apiKey = $apiKey;
-        $this->defaultHeaders = $defaultHeaders;
-        $this->builder = $builder;
-        $this->client = $client;
-    }
+        private string $apiKey,
+        private array $defaultHeaders,
+        private GeminiRequestBuilder $builder,
+        private HttpClientInterface $client,
+        private RetryConfig $retryConfig
+    ) {}
 
     /**
      * Make a standard HTTP request.
@@ -49,7 +41,7 @@ class GeminiHttpRequest
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)
             ->timeout(60)
-            ->retry(3, 2.0, 2.0)
+            ->withRetryConfig($this->retryConfig)
             ->post($url, $payload);
     }
 
@@ -71,6 +63,7 @@ class GeminiHttpRequest
         $streamResponse = null;
 
         return $this->client
+            ->withMethod('POST')
             ->withJson($payload)
             ->withHeader('x-goog-api-key', $this->apiKey)
             ->withHeaders($this->defaultHeaders)

@@ -7,6 +7,7 @@ namespace Rcalicdan\GeminiClient;
 use Hibla\HttpClient\Http;
 use Hibla\HttpClient\Interfaces\HttpClientInterface;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
+use Hibla\HttpClient\ValueObjects\RetryConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Rcalicdan\GeminiClient\Interfaces\GeminiBatchEmbeddingInterface;
 use Rcalicdan\GeminiClient\Interfaces\GeminiClientInterface;
@@ -30,25 +31,33 @@ class GeminiClient implements GeminiClientInterface
     private ?SSEReconnectConfig $defaultReconnectConfig = null;
     private array $defaultHeaders = [];
     private GeminiHttpRequest $httpClient;
-    public private(set) GeminiRequestBuilder $builder;
     private HttpClientInterface $baseHttpClient;
+    private RetryConfig $retryConfig;
+    public private(set) GeminiRequestBuilder $builder;
 
     public function __construct(
-        ?string $apiKey = null, 
+        ?string $apiKey = null,
         ?string $model = null,
         ?HttpClientInterface $httpClient = null
     ) {
         $this->apiKey = env('GEMINI_API_KEY', $apiKey);
         $this->model = $model;
         $this->builder = new GeminiRequestBuilder();
-        
+
         $this->baseHttpClient = $httpClient ?? Http::client();
-        
+
+        $this->retryConfig = new RetryConfig(
+            maxRetries: 3,
+            baseDelay: 2.0,
+            backoffMultiplier: 2.0
+        );
+
         $this->httpClient = new GeminiHttpRequest(
             $this->apiKey,
             $this->defaultHeaders,
             $this->builder,
-            $this->baseHttpClient
+            $this->baseHttpClient,
+            $this->retryConfig
         );
 
         $this->defaultReconnectConfig = new SSEReconnectConfig(
@@ -134,7 +143,8 @@ class GeminiClient implements GeminiClientInterface
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url);
+            ->get($url)
+        ;
     }
 
     /**
@@ -150,7 +160,8 @@ class GeminiClient implements GeminiClientInterface
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url);
+            ->get($url)
+        ;
     }
 
     /**
@@ -160,6 +171,25 @@ class GeminiClient implements GeminiClientInterface
     {
         $clone = clone $this;
         $clone->model = $model;
+
+        return $clone;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function withRetryConfig(RetryConfig $config): static
+    {
+        $clone = clone $this;
+        $clone->retryConfig = $config;
+
+        $clone->httpClient = new GeminiHttpRequest(
+            $clone->apiKey,
+            $clone->defaultHeaders,
+            $clone->builder,
+            $clone->baseHttpClient,
+            $clone->retryConfig
+        );
 
         return $clone;
     }
@@ -192,13 +222,14 @@ class GeminiClient implements GeminiClientInterface
     public function withHeaders(array $headers): static
     {
         $clone = clone $this;
-        $clone->defaultHeaders = array_merge($clone->defaultHeaders, $headers);
-        
+        $clone->defaultHeaders = [...$clone->defaultHeaders, ...$headers];
+
         $clone->httpClient = new GeminiHttpRequest(
             $clone->apiKey,
             $clone->defaultHeaders,
             $clone->builder,
-            $clone->baseHttpClient
+            $clone->baseHttpClient,
+            $clone->retryConfig
         );
 
         return $clone;

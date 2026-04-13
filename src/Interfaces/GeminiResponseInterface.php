@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace Rcalicdan\GeminiClient\Interfaces;
 
-use Hibla\HttpClient\Response;
+use Hibla\HttpClient\Interfaces\ResponseInterface;
 
 interface GeminiResponseInterface
 {
     /**
      * Get the raw HTTP response.
      */
-    public function raw(): Response;
+    public function raw(): ResponseInterface;
 
     /**
      * Get the response as a JSON array.
      *
-     * @return array<string, mixed>
+     * @return mixed
      * @throws \RuntimeException If the format is invalid or an API error occurred.
      */
-    public function json(): array;
+    public function json(?string $key = null, mixed $default = null): mixed;
 
     /**
      * Extract the generated text content from the response.
