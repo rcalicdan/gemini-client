@@ -56,7 +56,7 @@ interface GeminiClientInterface
     public function withModel(string $model): static;
 
     /**
-     * Configure the retry behavior for the API.
+     * Configure the retry behavior for the non streaming api.
      */
     public function withRetryConfig(RetryConfig $config): static;
 
