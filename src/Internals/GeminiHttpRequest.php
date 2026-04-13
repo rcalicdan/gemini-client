@@ -71,11 +71,14 @@ class GeminiHttpRequest
         callable $onChunk,
         SSEReconnectConfig $reconnectConfig
     ): PromiseInterface {
-        /** @var array<string> $collectedChunks */
-        $collectedChunks = [];
+        /** @var array<string> $bufferedChunks */
+        $bufferedChunks = [];
 
-        /** @var array<SSEEvent> $collectedEvents */
-        $collectedEvents = [];
+        /** @var array<SSEEvent> $bufferedEvents */
+        $bufferedEvents = [];
+        
+        /** @var GeminiStreamResponse|null $streamResponse */
+        $streamResponse = null;
 
         return $this->client
             ->withMethod('POST')
@@ -85,12 +88,17 @@ class GeminiHttpRequest
             ->timeout(120)
             ->sse($url)
             ->withReconnectConfig($reconnectConfig)
-            ->onEvent(function (mixed $event, mixed $control) use ($onChunk, &$collectedChunks, &$collectedEvents) {
+            ->onEvent(function (mixed $event, mixed $control) use ($onChunk, &$bufferedChunks, &$bufferedEvents, &$streamResponse) {
                 if (! $event instanceof SSEEvent) {
                     return;
                 }
 
                 if ($event->isKeepAlive()) {
+                    if ($streamResponse !== null) {
+                        $streamResponse->addEvent($event);
+                    } else {
+                        $bufferedEvents[] = $event;
+                    }
                     return;
                 }
 
@@ -101,27 +109,37 @@ class GeminiHttpRequest
                 $chunks = $this->builder->parseSSEData($event->data);
 
                 foreach ($chunks as $chunk) {
-                    $collectedChunks[] = $chunk;
-                    $collectedEvents[] = $event;
+                    if ($streamResponse !== null) {
+                        $streamResponse->addChunk($chunk);
+                        $streamResponse->addEvent($event);
+                    } else {
+                        $bufferedChunks[] = $chunk;
+                        $bufferedEvents[] = $event;
+                    }
+                    
                     $onChunk($chunk, $event);
                 }
             })
             ->onError(function (Throwable $error) use ($reconnectConfig) {
                 if ($reconnectConfig->onReconnect !== null) {
-                    print('SSE Error: ' . $error->getMessage());
+                    error_log('SSE Error: ' . $error->getMessage());
                 }
             })
             ->connect()
-            ->then(function (SSEResponse $sseResponse) use (&$collectedChunks, &$collectedEvents) {
+            ->then(function (SSEResponse $sseResponse) use (&$bufferedChunks, &$bufferedEvents, &$streamResponse) {
                 $streamResponse = new GeminiStreamResponse($sseResponse);
 
-                foreach ($collectedChunks as $chunk) {
+                foreach ($bufferedChunks as $chunk) {
                     $streamResponse->addChunk($chunk);
                 }
 
-                foreach ($collectedEvents as $event) {
+                foreach ($bufferedEvents as $event) {
                     $streamResponse->addEvent($event);
                 }
+                
+                // Clear buffers to free memory
+                $bufferedChunks = [];
+                $bufferedEvents = [];
 
                 return $streamResponse;
             })
