@@ -35,6 +35,7 @@ class GeminiHttpRequest
      *
      * @param string $url
      * @param array<string, mixed> $payload
+     *
      * @return PromiseInterface<Response>
      */
     public function makeRequest(string $url, array $payload): PromiseInterface
@@ -63,6 +64,7 @@ class GeminiHttpRequest
      * @param array<string, mixed> $payload
      * @param callable(string, SSEEvent): void $onChunk
      * @param SSEReconnectConfig $reconnectConfig
+     *
      * @return PromiseInterface<GeminiStreamResponse>
      */
     public function makeStreamRequest(
@@ -76,7 +78,7 @@ class GeminiHttpRequest
 
         /** @var array<SSEEvent> $bufferedEvents */
         $bufferedEvents = [];
-        
+
         /** @var GeminiStreamResponse|null $streamResponse */
         $streamResponse = null;
 
@@ -99,6 +101,7 @@ class GeminiHttpRequest
                     } else {
                         $bufferedEvents[] = $event;
                     }
+
                     return;
                 }
 
@@ -116,7 +119,7 @@ class GeminiHttpRequest
                         $bufferedChunks[] = $chunk;
                         $bufferedEvents[] = $event;
                     }
-                    
+
                     $onChunk($chunk, $event);
                 }
             })
@@ -136,7 +139,7 @@ class GeminiHttpRequest
                 foreach ($bufferedEvents as $event) {
                     $streamResponse->addEvent($event);
                 }
-                
+
                 // Clear buffers to free memory
                 $bufferedChunks = [];
                 $bufferedEvents = [];

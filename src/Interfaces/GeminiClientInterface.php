@@ -46,6 +46,7 @@ interface GeminiClientInterface
      * Get information about a specific model.
      *
      * @param string $model Model name
+     *
      * @return PromiseInterface<ResponseInterface>
      */
     public function getModel(string $model): PromiseInterface;

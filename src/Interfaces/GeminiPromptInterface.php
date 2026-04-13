@@ -81,6 +81,7 @@ interface GeminiPromptInterface
      *
      * @param callable(string, SSEEvent): void $onChunk
      * @param SSEReconnectConfig|null $reconnectConfig
+     *
      * @return PromiseInterface<GeminiStreamResponseInterface>
      */
     public function stream(callable $onChunk, ?SSEReconnectConfig $reconnectConfig = null): PromiseInterface;
@@ -90,6 +91,7 @@ interface GeminiPromptInterface
      *
      * @param array<string, mixed> $config
      * @param SSEReconnectConfig|null $reconnectConfig
+     *
      * @return PromiseInterface<GeminiStreamResponseInterface>
      */
     public function streamSSE(array $config = [], ?SSEReconnectConfig $reconnectConfig = null): PromiseInterface;
@@ -100,6 +102,7 @@ interface GeminiPromptInterface
      * @param string $messageEvent Event name for message chunks
      * @param string|null $doneEvent Event name for completion (null to disable)
      * @param bool $includeMetadata Whether to include chunk/length metadata
+     *
      * @return PromiseInterface<GeminiStreamResponseInterface>
      */
     public function streamWithEvents(string $messageEvent = 'message', ?string $doneEvent = 'done', bool $includeMetadata = true): PromiseInterface;

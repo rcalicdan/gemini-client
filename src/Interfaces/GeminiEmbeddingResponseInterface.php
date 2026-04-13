@@ -17,6 +17,7 @@ interface GeminiEmbeddingResponseInterface
      * Get the response as a JSON array.
      *
      * @return mixed
+     *
      * @throws \RuntimeException If the response format is invalid or an API error occurred.
      */
     public function json(): mixed;
@@ -25,6 +26,7 @@ interface GeminiEmbeddingResponseInterface
      * Get the raw embedding values directly.
      *
      * @return array<float>|array<array<float>>
+     *
      * @throws \RuntimeException If no embeddings were found in the response.
      */
     public function values(): array;

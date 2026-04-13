@@ -30,7 +30,6 @@ class GeminiClient implements GeminiClientInterface
      */
     private array $defaultHeaders = [];
 
-
     private string $apiKey;
 
     private ?string $model = null;
@@ -156,7 +155,8 @@ class GeminiClient implements GeminiClientInterface
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url);
+            ->get($url)
+        ;
     }
 
     /**
@@ -172,7 +172,8 @@ class GeminiClient implements GeminiClientInterface
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url);
+            ->get($url)
+        ;
     }
 
     /**

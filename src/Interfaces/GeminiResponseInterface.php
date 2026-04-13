@@ -17,6 +17,7 @@ interface GeminiResponseInterface
      * Get the response as a JSON array.
      *
      * @return mixed
+     *
      * @throws \RuntimeException If the format is invalid or an API error occurred.
      */
     public function json(?string $key = null, mixed $default = null): mixed;

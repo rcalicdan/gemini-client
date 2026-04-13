@@ -19,6 +19,7 @@ class GeminiRequestBuilder
      *
      * @param string|array<mixed> $prompt
      * @param array<string, mixed> $options
+     *
      * @return array<string, mixed>
      */
     public function buildGenerationPayload(string|array $prompt, array $options): array
@@ -45,6 +46,7 @@ class GeminiRequestBuilder
      * @param string $taskType
      * @param string|null $title
      * @param int|null $outputDimensionality
+     *
      * @return array<string, mixed>
      */
     public function buildEmbeddingPayload(
@@ -84,6 +86,7 @@ class GeminiRequestBuilder
      * @param array<array{content: string, task_type?: string, title?: string}> $requests
      * @param string $defaultModel
      * @param int|null $outputDimensionality
+     *
      * @return array<string, mixed>
      */
     public function buildBatchEmbeddingPayload(
@@ -122,6 +125,7 @@ class GeminiRequestBuilder
      * @param string $model
      * @param string $endpoint
      * @param array<string, string> $queryParams
+     *
      * @return string
      */
     public function buildModelUrl(string $model, string $endpoint, array $queryParams = []): string
@@ -155,6 +159,7 @@ class GeminiRequestBuilder
      * Build specific model info URL.
      *
      * @param string $model
+     *
      * @return string
      */
     public function buildModelInfoUrl(string $model): string
@@ -291,6 +296,7 @@ class GeminiRequestBuilder
      * Parse SSE event data and extract text chunks.
      *
      * @param string $data
+     *
      * @return array<string>
      */
     public function parseSSEData(string $data): array
@@ -338,6 +344,7 @@ class GeminiRequestBuilder
      *
      * @param array<float> $a
      * @param array<float> $b
+     *
      * @return float Value between -1.0 and 1.0 (1.0 = identical direction)
      */
     public function cosineSimilarity(array $a, array $b): float
@@ -364,6 +371,7 @@ class GeminiRequestBuilder
      * since the API only pre-normalizes full 3072-dimensional embeddings.
      *
      * @param array<float> $vector
+     *
      * @return array<float>
      */
     public function l2Normalize(array $vector): array

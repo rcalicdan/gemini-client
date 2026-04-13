@@ -11,7 +11,7 @@ use Rcalicdan\GeminiClient\Interfaces\GeminiBatchEmbeddingInterface;
 class GeminiBatchEmbedding implements GeminiBatchEmbeddingInterface
 {
     /**
-     *  @var array<array{content: string, task_type?: string, title?: string}>
+     * @var array<array{content: string, task_type?: string, title?: string}>
      */
     private array $requests = [];
 

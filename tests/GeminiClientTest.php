@@ -107,5 +107,6 @@ it('throws on API errors seamlessly', function () {
     ;
 
     expect(fn () => await(gemini()->prompt('Fail')->send())->text())
-        ->toThrow(RuntimeException::class, 'API Error: API key not valid. Please pass a valid API key.');
+        ->toThrow(RuntimeException::class, 'API Error: API key not valid. Please pass a valid API key.')
+    ;
 });

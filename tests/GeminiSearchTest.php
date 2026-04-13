@@ -37,5 +37,6 @@ it('can perform a local semantic search across multiple documents', function () 
 
     expect($results)->toHaveCount(2)
         ->and($results[0]['text'])->toBe('Laravel is a PHP framework')
-        ->and($results[0]['similarity'])->toBeGreaterThan(0.8);
+        ->and($results[0]['similarity'])->toBeGreaterThan(0.8)
+    ;
 });

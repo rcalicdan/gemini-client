@@ -30,12 +30,12 @@ class GeminiSSEStreamer
     private bool $completionEmitted = false;
 
     /**
-     *  @var array<string, mixed>
+     * @var array<string, mixed>
      */
     private array $customMetadata;
 
     /**
-     *  @var callable(string, array<string, mixed>): array<string, mixed>|null
+     * @var callable(string, array<string, mixed>): array<string, mixed>|null
      */
     private $onBeforeEmit;
 

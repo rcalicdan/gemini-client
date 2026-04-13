@@ -13,12 +13,12 @@ class GeminiStreamResponse implements GeminiStreamResponseInterface
     private string $fullText = '';
 
     /**
-     *  @var array<string>
+     * @var array<string>
      */
     private array $chunks = [];
 
     /**
-     *  @var array<SSEEvent>
+     * @var array<SSEEvent>
      */
     private array $events = [];
 

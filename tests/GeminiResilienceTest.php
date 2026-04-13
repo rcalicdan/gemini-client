@@ -36,5 +36,6 @@ it('fails after exceeding maximum retry attempts', function () {
     ;
 
     expect(fn () => await($client->prompt('Too many fails')->send()))
-        ->toThrow(Hibla\HttpClient\Exceptions\NetworkException::class);
+        ->toThrow(Hibla\HttpClient\Exceptions\NetworkException::class)
+    ;
 });
