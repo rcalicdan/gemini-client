@@ -2,7 +2,7 @@
 
 **An async-first, fluent PHP client for the Google Gemini API built on the Hibla HTTP Client.**
 
-Supports content generation, streaming (SSE), embeddings, batch embeddings, and semantic search — all non-blocking, built on top of [Hibla Promise](https://github.com/hiblaphp/promise) and [Hibla Event Loop](https://github.com/hiblaphp/event-loop).
+Supports content generation, streaming (SSE), embeddings, batch embeddings, and semantic search. Everything is non-blocking, built on top of [Hibla Promise](https://github.com/hiblaphp/promise) and [Hibla Event Loop](https://github.com/hiblaphp/event-loop).
 
 [![Latest Release](https://img.shields.io/github/release/rcalicdan/gemini-client.svg?style=flat-square)](https://github.com/rcalicdan/gemini-client/releases)
 [![Tests](https://github.com/rcalicdan/gemini-client/actions/workflows/test.yml/badge.svg)](https://github.com/rcalicdan/gemini-client/actions/workflows/test.yml)
@@ -155,7 +155,7 @@ echo $translation->text();
 ```php
 use Rcalicdan\GeminiClient\GeminiClient;
 
-// API key from argument
+// API key as an argument (used as fallback if GEMINI_API_KEY env var is not set)
 $gemini = new GeminiClient(apiKey: 'YOUR_API_KEY');
 
 // API key from .env (GEMINI_API_KEY) via rcalicdan/config-loader
@@ -163,14 +163,17 @@ $gemini = new GeminiClient();
 
 // With a default model override
 $gemini = new GeminiClient(apiKey: 'YOUR_API_KEY', model: 'gemini-2.0-flash');
+
+// With a custom HTTP client
+$gemini = new GeminiClient(apiKey: 'YOUR_API_KEY', httpClient: $httpClient);
 ```
 
 ### API key resolution
 
 The constructor resolves the API key in the following order:
 
-1. The `$apiKey` argument if provided.
-2. The `GEMINI_API_KEY` environment variable via `rcalicdan/config-loader`.
+1. The `GEMINI_API_KEY` environment variable via `rcalicdan/config-loader`.
+2. The `$apiKey` argument if the environment variable is not set.
 
 If neither is present the key defaults to an empty string and all requests will fail with a 403 from the API.
 
@@ -414,7 +417,7 @@ echo "Full text: " . $response->text();
 
 ### Browser SSE streaming
 
-`streamSSE()` handles the full browser SSE protocol automatically — it formats chunks as `event: ... / data: ...` pairs, calls `ob_flush()` and `flush()` after every chunk, and emits a final completion event when the stream closes.
+`streamSSE()` handles the full browser SSE protocol automatically. It formats chunks as `event: ... / data: ...` pairs, calls `ob_flush()` and `flush()` after every chunk, and emits a final completion event when the stream closes.
 
 Set your response headers before calling it:
 
@@ -573,7 +576,7 @@ $json   = $response->json();       // full decoded response
 $raw    = $response->raw();        // underlying ResponseInterface
 ```
 
-Pass an array of strings to embed multiple texts in a single request:
+Passing an array of strings embeds all texts as parts of a single request. This differs from `batchEmbed()`, which sends each text as its own independently configured sub-request. Prefer `batchEmbed()` when you need per-item task types or titles.
 
 ```php
 $response = await(
@@ -660,7 +663,7 @@ $response = await(
 
 ## Semantic search
 
-`search()` embeds the query and all documents, computes cosine similarity between them, and returns the results sorted by relevance. Everything — the query embedding, all document embeddings, and the ranking — runs in a single `await()` call.
+`search()` embeds the query and all documents, computes cosine similarity between them, and returns the results sorted by relevance. The query embedding, all document embeddings, and the ranking all run in a single `await()` call.
 
 ### Basic search
 
@@ -729,11 +732,11 @@ $gemini = (new GeminiClient(apiKey: $key))
     ));
 ```
 
-Retry only applies to non-streaming requests (`send()`). SSE connections use the separate reconnection config described in [SSE reconnection](#sse-reconnection).
+Retry configuration applies to content generation and embedding requests (`send()`). SSE connections use the separate reconnection config described in [SSE reconnection](#sse-reconnection). Note that `listModels()` and `getModel()` use their own hardcoded retry policy and are not affected by `withRetryConfig()`.
 
 ### Custom HTTP client
 
-Inject any `HttpClientInterface` implementation — useful for testing or swapping transports:
+Inject any `HttpClientInterface` implementation, which is useful for testing or swapping transports:
 
 ```php
 use Hibla\HttpClient\Http;
@@ -801,7 +804,7 @@ echo $info['inputTokenLimit']; // 1048576
 | `getModel(string $model)` | `PromiseInterface<ResponseInterface>` | Get info about a specific model |
 | `withModel(string $model)` | `static` | Set the default generation model |
 | `withEmbeddingModel(string $model)` | `static` | Set the default embedding model |
-| `withRetryConfig(RetryConfig $config)` | `static` | Override retry behaviour |
+| `withRetryConfig(RetryConfig $config)` | `static` | Override retry behaviour for generation and embedding requests |
 | `withReconnectConfig(SSEReconnectConfig $config)` | `static` | Override SSE reconnection defaults |
 | `withHeaders(array $headers)` | `static` | Merge default headers into all requests |
 
@@ -891,7 +894,7 @@ echo $info['inputTokenLimit']; // 1048576
 |--------|-------------|-------------|
 | `values()` | `array<float>\|array<array<float>>` | Embedding vector(s) |
 | `embeddings()` | `array<float>\|array<array<float>>` | Alias for `values()` |
-| `json()` | `mixed` | Full decoded response |
+| `json(?string $key, mixed $default)` | `mixed` | Full decoded response, with optional dot-notation key access |
 | `raw()` | `ResponseInterface` | Underlying HTTP response |
 
 ---
