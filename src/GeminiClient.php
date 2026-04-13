@@ -25,6 +25,10 @@ use function Rcalicdan\ConfigLoader\env;
 
 class GeminiClient implements GeminiClientInterface
 {
+    private const string DEFAULT_MODEL = 'gemini-flash-latest';
+
+    private const string DEFAULT_EMBEDDING_MODEL = 'gemini-embedding-001';
+
     /**
      * @var array<string, array<string>|string>
      */
@@ -104,7 +108,7 @@ class GeminiClient implements GeminiClientInterface
             $this->httpClient,
             $this->builder,
             $prompt,
-            $this->model ?? 'gemini-2.0-flash',
+            $this->model ?? self::DEFAULT_MODEL,
             $this->defaultReconnectConfig
         );
     }
@@ -118,7 +122,7 @@ class GeminiClient implements GeminiClientInterface
             $this->httpClient,
             $this->builder,
             $content,
-            $this->embeddingModel ?? 'gemini-embedding-001'
+            $this->embeddingModel ?? self::DEFAULT_EMBEDDING_MODEL
         );
     }
 
@@ -130,7 +134,7 @@ class GeminiClient implements GeminiClientInterface
         return new GeminiBatchEmbedding(
             $this->httpClient,
             $this->builder,
-            $this->embeddingModel ?? 'gemini-embedding-001'
+            $this->embeddingModel ?? self::DEFAULT_EMBEDDING_MODEL
         );
     }
 
