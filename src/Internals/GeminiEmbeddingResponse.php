@@ -4,24 +4,21 @@ declare(strict_types=1);
 
 namespace Rcalicdan\GeminiClient\Internals;
 
-use Hibla\HttpClient\Response;
+use Hibla\HttpClient\Interfaces\ResponseInterface;
 use Rcalicdan\GeminiClient\Interfaces\GeminiEmbeddingResponseInterface;
 
 class GeminiEmbeddingResponse implements GeminiEmbeddingResponseInterface
 {
-    private Response $response;
-    private GeminiRequestBuilder $builder;
-
-    public function __construct(Response $response, GeminiRequestBuilder $builder)
-    {
-        $this->response = $response;
-        $this->builder = $builder;
+    public function __construct(
+        private ResponseInterface $response,
+        private GeminiRequestBuilder $builder
+    ) {
     }
 
     /**
      * {@inheritDoc}
      */
-    public function raw(): Response
+    public function raw(): ResponseInterface
     {
         return $this->response;
     }
@@ -29,16 +26,19 @@ class GeminiEmbeddingResponse implements GeminiEmbeddingResponseInterface
     /**
      * {@inheritDoc}
      */
-    public function json(): array
+    public function json(?string $key = null, mixed $default = null): mixed
     {
-        $data = $this->response->json();
+        $data = $this->response->json($key, $default);
 
-        if (! is_array($data)) {
-            throw new \RuntimeException('Invalid response format');
+        if (! \is_array($data)) {
+            return $data;
         }
 
-        if (isset($data['error'])) {
-            $errorMessage = $data['error']['message'] ?? 'Unknown API error';
+        $error = $data['error'] ?? null;
+        if (\is_array($error)) {
+            $errorMessage = isset($error['message']) && \is_string($error['message'])
+                ? $error['message']
+                : 'Unknown API error';
 
             throw new \RuntimeException('API Error: ' . $errorMessage);
         }

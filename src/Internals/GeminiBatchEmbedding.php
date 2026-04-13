@@ -10,20 +10,18 @@ use Rcalicdan\GeminiClient\Interfaces\GeminiBatchEmbeddingInterface;
 
 class GeminiBatchEmbedding implements GeminiBatchEmbeddingInterface
 {
-    private GeminiHttpRequest $httpClient;
-    private GeminiRequestBuilder $builder;
-    private string $model;
+    /**
+     *  @var array<array{content: string, task_type?: string, title?: string}>
+     */
     private array $requests = [];
+
     private ?int $outputDimensionality = null;
 
     public function __construct(
-        GeminiHttpRequest $httpClient,
-        GeminiRequestBuilder $builder,
-        string $defaultModel
+        private GeminiHttpRequest $httpClient,
+        private GeminiRequestBuilder $builder,
+        private string $model
     ) {
-        $this->httpClient = $httpClient;
-        $this->builder = $builder;
-        $this->model = $defaultModel;
     }
 
     /**
@@ -55,6 +53,7 @@ class GeminiBatchEmbedding implements GeminiBatchEmbeddingInterface
     {
         $clone = clone $this;
 
+        /** @var array{content: string, task_type?: string, title?: string} $request */
         $request = ['content' => $content, 'task_type' => $taskType];
         if ($title !== null) {
             $request['title'] = $title;
@@ -70,7 +69,7 @@ class GeminiBatchEmbedding implements GeminiBatchEmbeddingInterface
      */
     public function send(): PromiseInterface
     {
-        if (empty($this->requests)) {
+        if (\count($this->requests) === 0) {
             throw new \RuntimeException('Cannot send a batch embedding request without any items.');
         }
 

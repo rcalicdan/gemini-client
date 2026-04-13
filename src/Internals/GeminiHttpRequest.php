@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\Interfaces\HttpClientInterface;
-use Hibla\HttpClient\Interfaces\SSE\SSEControlInterface;
 use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
@@ -19,13 +18,17 @@ use Throwable;
  */
 class GeminiHttpRequest
 {
+    /**
+     * @param array<string, array<string>|string> $defaultHeaders
+     */
     public function __construct(
         private string $apiKey,
         private array $defaultHeaders,
         private GeminiRequestBuilder $builder,
         private HttpClientInterface $client,
         private RetryConfig $retryConfig
-    ) {}
+    ) {
+    }
 
     /**
      * Make a standard HTTP request.
@@ -42,7 +45,15 @@ class GeminiHttpRequest
             ->withHeaders($this->defaultHeaders)
             ->timeout(60)
             ->withRetryConfig($this->retryConfig)
-            ->post($url, $payload);
+            ->post($url, $payload)
+            ->then(function (mixed $response) use ($url): Response {
+                if (! $response instanceof Response) {
+                    throw new \RuntimeException('Expected Response instance from ' . $url);
+                }
+
+                return $response;
+            })
+        ;
     }
 
     /**
@@ -60,7 +71,11 @@ class GeminiHttpRequest
         callable $onChunk,
         SSEReconnectConfig $reconnectConfig
     ): PromiseInterface {
-        $streamResponse = null;
+        /** @var array<string> $collectedChunks */
+        $collectedChunks = [];
+
+        /** @var array<SSEEvent> $collectedEvents */
+        $collectedEvents = [];
 
         return $this->client
             ->withMethod('POST')
@@ -70,7 +85,11 @@ class GeminiHttpRequest
             ->timeout(120)
             ->sse($url)
             ->withReconnectConfig($reconnectConfig)
-            ->onEvent(function (SSEEvent $event, SSEControlInterface $control) use ($onChunk, &$streamResponse) {
+            ->onEvent(function (mixed $event, mixed $control) use ($onChunk, &$collectedChunks, &$collectedEvents) {
+                if (! $event instanceof SSEEvent) {
+                    return;
+                }
+
                 if ($event->isKeepAlive()) {
                     return;
                 }
@@ -82,11 +101,8 @@ class GeminiHttpRequest
                 $chunks = $this->builder->parseSSEData($event->data);
 
                 foreach ($chunks as $chunk) {
-                    if ($streamResponse !== null) {
-                        $streamResponse->addChunk($chunk);
-                        $streamResponse->addEvent($event);
-                    }
-
+                    $collectedChunks[] = $chunk;
+                    $collectedEvents[] = $event;
                     $onChunk($chunk, $event);
                 }
             })
@@ -96,10 +112,19 @@ class GeminiHttpRequest
                 }
             })
             ->connect()
-            ->then(function (SSEResponse $sseResponse) use (&$streamResponse) {
-                $streamResponse = new GeminiStreamResponse($sseResponse, $this->builder);
+            ->then(function (SSEResponse $sseResponse) use (&$collectedChunks, &$collectedEvents) {
+                $streamResponse = new GeminiStreamResponse($sseResponse);
+
+                foreach ($collectedChunks as $chunk) {
+                    $streamResponse->addChunk($chunk);
+                }
+
+                foreach ($collectedEvents as $event) {
+                    $streamResponse->addEvent($event);
+                }
 
                 return $streamResponse;
-            });
+            })
+        ;
     }
 }

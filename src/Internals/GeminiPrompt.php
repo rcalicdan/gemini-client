@@ -12,25 +12,27 @@ use Rcalicdan\GeminiClient\Interfaces\GeminiPromptInterface;
 
 class GeminiPrompt implements GeminiPromptInterface
 {
-    private GeminiHttpRequest $httpClient;
-    private GeminiRequestBuilder $builder;
+    /**
+     * @var string|array<mixed>
+     */
     private string|array $prompt;
-    private string $model;
-    private SSEReconnectConfig $reconnectConfig;
+
+    /**
+     * @var array<string, mixed>
+     */
     private array $options = [];
 
+    /**
+     * @param string|array<mixed> $prompt
+     */
     public function __construct(
-        GeminiHttpRequest $httpClient,
-        GeminiRequestBuilder $builder,
+        private GeminiHttpRequest $httpClient,
+        private GeminiRequestBuilder $builder,
         string|array $prompt,
-        string $defaultModel,
-        SSEReconnectConfig $defaultReconnectConfig
+        private string $model,
+        private SSEReconnectConfig $reconnectConfig
     ) {
-        $this->httpClient = $httpClient;
-        $this->builder = $builder;
         $this->prompt = $prompt;
-        $this->model = $defaultModel;
-        $this->reconnectConfig = $defaultReconnectConfig;
     }
 
     /**
@@ -74,6 +76,11 @@ class GeminiPrompt implements GeminiPromptInterface
     public function temperature(float $temperature): static
     {
         $clone = clone $this;
+
+        if (! \is_array($clone->options['generationConfig'] ?? null)) {
+            $clone->options['generationConfig'] = [];
+        }
+
         $clone->options['generationConfig']['temperature'] = $temperature;
 
         return $clone;
@@ -85,6 +92,11 @@ class GeminiPrompt implements GeminiPromptInterface
     public function maxTokens(int $maxTokens): static
     {
         $clone = clone $this;
+
+        if (! \is_array($clone->options['generationConfig'] ?? null)) {
+            $clone->options['generationConfig'] = [];
+        }
+
         $clone->options['generationConfig']['maxOutputTokens'] = $maxTokens;
 
         return $clone;
@@ -96,6 +108,11 @@ class GeminiPrompt implements GeminiPromptInterface
     public function topP(float $topP): static
     {
         $clone = clone $this;
+
+        if (! \is_array($clone->options['generationConfig'] ?? null)) {
+            $clone->options['generationConfig'] = [];
+        }
+
         $clone->options['generationConfig']['topP'] = $topP;
 
         return $clone;
@@ -107,6 +124,11 @@ class GeminiPrompt implements GeminiPromptInterface
     public function topK(int $topK): static
     {
         $clone = clone $this;
+
+        if (! \is_array($clone->options['generationConfig'] ?? null)) {
+            $clone->options['generationConfig'] = [];
+        }
+
         $clone->options['generationConfig']['topK'] = $topK;
 
         return $clone;

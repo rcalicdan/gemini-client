@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Rcalicdan\GeminiClient\Internals;
 
-use Hibla\HttpClient\Response;
+use Hibla\HttpClient\Interfaces\ResponseInterface;
 
 /**
  * Handles request building and response parsing for Gemini API
  */
 class GeminiRequestBuilder
 {
-    private const BASE_URL = 'https://generativelanguage.googleapis.com';
-    private const API_VERSION = 'v1beta';
+    private const string BASE_URL = 'https://generativelanguage.googleapis.com';
+    private const string API_VERSION = 'v1beta';
 
     /**
      * Build generation payload.
@@ -23,7 +23,7 @@ class GeminiRequestBuilder
      */
     public function buildGenerationPayload(string|array $prompt, array $options): array
     {
-        $contents = is_string($prompt)
+        $contents = \is_string($prompt)
             ? [['parts' => [['text' => $prompt]]]]
             : (isset($prompt['parts']) ? [$prompt] : $prompt);
 
@@ -57,7 +57,7 @@ class GeminiRequestBuilder
             'task_type' => $taskType,
         ];
 
-        if (is_string($content)) {
+        if (\is_string($content)) {
             $payload['content'] = [
                 'parts' => [['text' => $content]],
             ];
@@ -126,7 +126,7 @@ class GeminiRequestBuilder
      */
     public function buildModelUrl(string $model, string $endpoint, array $queryParams = []): string
     {
-        $url = sprintf(
+        $url = \sprintf(
             '%s/%s/models/%s:%s',
             self::BASE_URL,
             self::API_VERSION,
@@ -134,7 +134,7 @@ class GeminiRequestBuilder
             $endpoint
         );
 
-        if (! empty($queryParams)) {
+        if (\count($queryParams) > 0) {
             $url .= '?' . http_build_query($queryParams);
         }
 
@@ -148,7 +148,7 @@ class GeminiRequestBuilder
      */
     public function buildModelsUrl(): string
     {
-        return sprintf('%s/%s/models', self::BASE_URL, self::API_VERSION);
+        return \sprintf('%s/%s/models', self::BASE_URL, self::API_VERSION);
     }
 
     /**
@@ -159,64 +159,79 @@ class GeminiRequestBuilder
      */
     public function buildModelInfoUrl(string $model): string
     {
-        return sprintf('%s/%s/models/%s', self::BASE_URL, self::API_VERSION, $model);
+        return \sprintf('%s/%s/models/%s', self::BASE_URL, self::API_VERSION, $model);
     }
 
     /**
      * Extract text from generation response.
      */
-    public function extractTextFromResponse(Response $response): string
+    public function extractTextFromResponse(ResponseInterface $response): string
     {
         $data = $response->json();
 
-        if (! is_array($data)) {
+        if (! \is_array($data)) {
             throw new \RuntimeException('Invalid response format');
         }
 
-        if (isset($data['error'])) {
-            $errorMessage = $data['error']['message'] ?? 'Unknown API error';
+        $error = $data['error'] ?? null;
+        if (\is_array($error)) {
+            $errorMessage = isset($error['message']) && \is_string($error['message'])
+                ? $error['message']
+                : 'Unknown API error';
 
             throw new \RuntimeException('API Error: ' . $errorMessage);
         }
 
-        $candidates = $data['candidates'] ?? [];
+        $rawCandidates = $data['candidates'] ?? null;
+        $candidates = \is_array($rawCandidates) ? $rawCandidates : [];
 
-        if (empty($candidates) && isset($data[0]['candidates'])) {
-            $candidates = $data[0]['candidates'];
+        if (count($candidates) === 0) {
+            $firstItem = $data[0] ?? null;
+            if (\is_array($firstItem)) {
+                $rawFallback = $firstItem['candidates'] ?? null;
+                $candidates = \is_array($rawFallback) ? $rawFallback : [];
+            }
         }
 
-        if (empty($candidates)) {
-            if (isset($data['content']['parts'])) {
-                $parts = $data['content']['parts'];
-                $text = '';
-                foreach ($parts as $part) {
-                    if (isset($part['text'])) {
-                        $text .= $part['text'];
+        if (count($candidates) === 0) {
+            $contentData = $data['content'] ?? null;
+            if (\is_array($contentData)) {
+                $parts = $contentData['parts'] ?? null;
+                if (\is_array($parts)) {
+                    $text = '';
+                    foreach ($parts as $part) {
+                        if (\is_array($part) && isset($part['text']) && \is_string($part['text'])) {
+                            $text .= $part['text'];
+                        }
                     }
-                }
 
-                return $text;
+                    return $text;
+                }
             }
 
             throw new \RuntimeException('No candidates in response. Response structure: ' . json_encode(array_keys($data)));
         }
 
-        $content = $candidates[0]['content'] ?? [];
-        $parts = $content['parts'] ?? [];
+        $firstCandidate = $candidates[0] ?? null;
+        if (! \is_array($firstCandidate)) {
+            throw new \RuntimeException('Invalid candidate format');
+        }
 
-        if (empty($parts)) {
+        $contentData = $firstCandidate['content'] ?? null;
+        $parts = \is_array($contentData)
+            ? ($contentData['parts'] ?? null)
+            : null;
+        $parts = \is_array($parts) ? $parts : [];
+
+        if (count($parts) === 0) {
             throw new \RuntimeException('No parts in candidate content');
         }
 
         $text = '';
         foreach ($parts as $part) {
-            if (isset($part['text'])) {
+            if (\is_array($part) && isset($part['text']) && \is_string($part['text'])) {
                 $text .= $part['text'];
             }
-        }
-
-        if (empty($text)) {
-            throw new \RuntimeException('No text content found in response parts');
         }
 
         return $text;
@@ -227,26 +242,46 @@ class GeminiRequestBuilder
      *
      * @return array<float>|array<array<float>>
      */
-    public function extractEmbeddingsFromResponse(Response $response): array
+    public function extractEmbeddingsFromResponse(ResponseInterface $response): array
     {
         $data = $response->json();
 
-        if (! is_array($data)) {
+        if (! \is_array($data)) {
             throw new \RuntimeException('Invalid response format');
         }
 
-        if (isset($data['error'])) {
-            $errorMessage = $data['error']['message'] ?? 'Unknown API error';
+        $error = $data['error'] ?? null;
+        if (\is_array($error)) {
+            $errorMessage = isset($error['message']) && \is_string($error['message'])
+                ? $error['message']
+                : 'Unknown API error';
 
             throw new \RuntimeException('API Error: ' . $errorMessage);
         }
 
-        if (isset($data['embedding']['values'])) {
-            return $data['embedding']['values'];
+        $embedding = $data['embedding'] ?? null;
+        if (\is_array($embedding)) {
+            $values = $embedding['values'] ?? null;
+            if (\is_array($values)) {
+                /** @var array<float> */
+                return $values;
+            }
         }
 
-        if (isset($data['embeddings'])) {
-            return array_map(fn ($emb) => $emb['values'] ?? [], $data['embeddings']);
+        $embeddings = $data['embeddings'] ?? null;
+        if (\is_array($embeddings)) {
+            /** @var array<array<float>> */
+            return array_map(
+                function (mixed $emb): array {
+                    if (! \is_array($emb)) {
+                        return [];
+                    }
+                    $values = $emb['values'] ?? null;
+
+                    return \is_array($values) ? $values : [];
+                },
+                $embeddings
+            );
         }
 
         throw new \RuntimeException('No embeddings found in response');
@@ -260,20 +295,34 @@ class GeminiRequestBuilder
      */
     public function parseSSEData(string $data): array
     {
+        /** @var array<string> $chunks */
         $chunks = [];
         $parsed = json_decode($data, true);
 
-        if (! is_array($parsed)) {
+        if (! \is_array($parsed)) {
             return $chunks;
         }
 
-        $candidates = $parsed['candidates'] ?? [];
+        $rawCandidates = $parsed['candidates'] ?? null;
+        $candidates = \is_array($rawCandidates) ? $rawCandidates : [];
+
         foreach ($candidates as $candidate) {
-            $content = $candidate['content'] ?? [];
-            $parts = $content['parts'] ?? [];
+            if (! \is_array($candidate)) {
+                continue;
+            }
+
+            $contentData = $candidate['content'] ?? null;
+            if (! \is_array($contentData)) {
+                continue;
+            }
+
+            $parts = $contentData['parts'] ?? null;
+            if (! \is_array($parts)) {
+                continue;
+            }
 
             foreach ($parts as $part) {
-                if (isset($part['text'])) {
+                if (\is_array($part) && isset($part['text']) && \is_string($part['text'])) {
                     $chunks[] = $part['text'];
                 }
             }
@@ -301,7 +350,8 @@ class GeminiRequestBuilder
         $b = $this->l2Normalize($b);
 
         $similarity = 0.0;
-        for ($i = 0; $i < count($a); $i++) {
+        $length = count($a);
+        for ($i = 0; $i < $length; $i++) {
             $similarity += $a[$i] * $b[$i];
         }
 
@@ -320,7 +370,7 @@ class GeminiRequestBuilder
     {
         $magnitude = sqrt(array_sum(array_map(fn ($v) => $v * $v, $vector)));
 
-        if ($magnitude == 0.0) {
+        if ($magnitude === 0.0) {
             return $vector;
         }
 

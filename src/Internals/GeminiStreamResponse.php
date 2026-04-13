@@ -4,28 +4,33 @@ declare(strict_types=1);
 
 namespace Rcalicdan\GeminiClient\Internals;
 
+use Hibla\HttpClient\Interfaces\SSEResponseInterface;
 use Hibla\HttpClient\SSE\SSEEvent;
-use Hibla\HttpClient\SSE\SSEResponse;
 use Rcalicdan\GeminiClient\Interfaces\GeminiStreamResponseInterface;
 
 class GeminiStreamResponse implements GeminiStreamResponseInterface
 {
-    private SSEResponse $sseResponse;
-    private GeminiRequestBuilder $builder;
     private string $fullText = '';
+
+    /**
+     *  @var array<string>
+     */
     private array $chunks = [];
+
+    /**
+     *  @var array<SSEEvent>
+     */
     private array $events = [];
 
-    public function __construct(SSEResponse $sseResponse, GeminiRequestBuilder $builder)
-    {
-        $this->sseResponse = $sseResponse;
-        $this->builder = $builder;
+    public function __construct(
+        private SSEResponseInterface $sseResponse,
+    ) {
     }
 
     /**
      * {@inheritDoc}
      */
-    public function raw(): SSEResponse
+    public function raw(): SSEResponseInterface
     {
         return $this->sseResponse;
     }
@@ -57,6 +62,8 @@ class GeminiStreamResponse implements GeminiStreamResponseInterface
 
     /**
      * {@inheritDoc}
+     *
+     * @return array<string>
      */
     public function chunks(): array
     {
@@ -68,11 +75,13 @@ class GeminiStreamResponse implements GeminiStreamResponseInterface
      */
     public function chunkCount(): int
     {
-        return count($this->chunks);
+        return \count($this->chunks);
     }
 
     /**
      * {@inheritDoc}
+     *
+     * @return array<SSEEvent>
      */
     public function events(): array
     {
@@ -84,7 +93,7 @@ class GeminiStreamResponse implements GeminiStreamResponseInterface
      */
     public function eventCount(): int
     {
-        return count($this->events);
+        return \count($this->events);
     }
 
     /**

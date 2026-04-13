@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Rcalicdan\GeminiClient\Interfaces;
 
+use Hibla\HttpClient\Interfaces\SSEResponseInterface;
 use Hibla\HttpClient\SSE\SSEEvent;
-use Hibla\HttpClient\SSE\SSEResponse;
 
 interface GeminiStreamResponseInterface
 {
     /**
      * Get the raw SSE response.
      */
-    public function raw(): SSEResponse;
+    public function raw(): SSEResponseInterface;
 
     /**
      * Add a chunk to the accumulated text.

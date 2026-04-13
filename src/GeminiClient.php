@@ -25,14 +25,26 @@ use function Rcalicdan\ConfigLoader\env;
 
 class GeminiClient implements GeminiClientInterface
 {
-    private string $apiKey;
-    private ?string $model = null;
-    private ?string $embeddingModel = null;
-    private ?SSEReconnectConfig $defaultReconnectConfig = null;
+    /**
+     * @var array<string, array<string>|string>
+     */
     private array $defaultHeaders = [];
+
+
+    private string $apiKey;
+
+    private ?string $model = null;
+
+    private ?string $embeddingModel = null;
+
+    private SSEReconnectConfig $defaultReconnectConfig;
+
     private GeminiHttpRequest $httpClient;
+
     private HttpClientInterface $baseHttpClient;
+
     private RetryConfig $retryConfig;
+
     public private(set) GeminiRequestBuilder $builder;
 
     public function __construct(
@@ -40,7 +52,8 @@ class GeminiClient implements GeminiClientInterface
         ?string $model = null,
         ?HttpClientInterface $httpClient = null
     ) {
-        $this->apiKey = env('GEMINI_API_KEY', $apiKey);
+        $resolvedKey = env('GEMINI_API_KEY', $apiKey);
+        $this->apiKey = \is_string($resolvedKey) ? $resolvedKey : '';
         $this->model = $model;
         $this->builder = new GeminiRequestBuilder();
 
@@ -143,8 +156,7 @@ class GeminiClient implements GeminiClientInterface
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url)
-        ;
+            ->get($url);
     }
 
     /**
@@ -160,8 +172,7 @@ class GeminiClient implements GeminiClientInterface
             ->withHeaders($this->defaultHeaders)
             ->timeout(30)
             ->retry(3, 1.0, 2.0)
-            ->get($url)
-        ;
+            ->get($url);
     }
 
     /**
@@ -218,6 +229,8 @@ class GeminiClient implements GeminiClientInterface
 
     /**
      * {@inheritDoc}
+     *
+     * @param array<string, array<string>|string> $headers
      */
     public function withHeaders(array $headers): static
     {

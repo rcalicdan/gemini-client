@@ -14,22 +14,26 @@ use function Hibla\await;
 
 class GeminiSearch implements GeminiSearchInterface
 {
-    private GeminiClientInterface $client;
-    private GeminiRequestBuilder $builder;
-    private string $query;
+    /**
+     * @var array<string>
+     */
     private array $documents = [];
+
     private ?string $model = null;
+
     private ?int $outputDimensionality = null;
 
-    public function __construct(GeminiClientInterface $client, GeminiRequestBuilder $builder, string $query)
-    {
-        $this->client = $client;
-        $this->builder = $builder;
-        $this->query = $query;
+    public function __construct(
+        private GeminiClientInterface $client,
+        private GeminiRequestBuilder $builder,
+        private string $query
+    ) {
     }
 
     /**
      * {@inheritDoc}
+     *
+     * @param array<string> $documents
      */
     public function documents(array $documents): static
     {
@@ -66,7 +70,7 @@ class GeminiSearch implements GeminiSearchInterface
      */
     public function send(): PromiseInterface
     {
-        if (empty($this->documents)) {
+        if (\count($this->documents) === 0) {
             throw new \RuntimeException('Cannot execute search without providing documents to search against.');
         }
 
@@ -84,7 +88,12 @@ class GeminiSearch implements GeminiSearchInterface
             }
 
             $queryResponse = await($queryBuilder->send());
-            $queryEmbedding = $queryResponse->values();
+
+            $rawQueryEmbedding = $queryResponse->values();
+            /** @var array<float> $queryEmbedding */
+            $queryEmbedding = \is_array($rawQueryEmbedding[0] ?? null)
+                ? ($rawQueryEmbedding[0] ?? [])
+                : $rawQueryEmbedding;
 
             $docPromises = [];
             foreach ($this->documents as $doc) {
@@ -103,23 +112,29 @@ class GeminiSearch implements GeminiSearchInterface
                 $docPromises[] = $docBuilder->send();
             }
 
-            /** @var GeminiEmbeddingResponse[] $docResponses */
+            /** @var array<GeminiEmbeddingResponse> $docResponses */
             $docResponses = await(Promise::all($docPromises));
 
+            /** @var array<array{text: string, similarity: float, index: int}> $results */
             $results = [];
 
             foreach ($docResponses as $index => $docResponse) {
-                $docEmbedding = $docResponse->values();
+                $rawDocEmbedding = $docResponse->values();
+                /** @var array<float> $docEmbedding */
+                $docEmbedding = \is_array($rawDocEmbedding[0] ?? null)
+                    ? ($rawDocEmbedding[0] ?? [])
+                    : $rawDocEmbedding;
+
                 $similarity = $this->builder->cosineSimilarity($queryEmbedding, $docEmbedding);
 
                 $results[] = [
                     'text' => $this->documents[$index],
                     'similarity' => $similarity,
-                    'index' => $index,
+                    'index' => (int) $index,
                 ];
             }
 
-            usort($results, fn ($a, $b) => $b['similarity'] <=> $a['similarity']);
+            usort($results, fn (array $a, array $b) => $b['similarity'] <=> $a['similarity']);
 
             return $results;
         });

@@ -10,22 +10,28 @@ use Rcalicdan\GeminiClient\Interfaces\GeminiEmbeddingInterface;
 
 class GeminiEmbedding implements GeminiEmbeddingInterface
 {
-    private GeminiHttpRequest $httpClient;
-    private GeminiRequestBuilder $builder;
+    /**
+     * @var string|array<string>
+     */
     private string|array $content;
+
     private string $model;
+
     private string $taskType = 'RETRIEVAL_DOCUMENT';
+
     private ?string $title = null;
+
     private ?int $outputDimensionality = null;
 
+    /**
+     * @param string|array<string> $content
+     */
     public function __construct(
-        GeminiHttpRequest $httpClient,
-        GeminiRequestBuilder $builder,
+        private GeminiHttpRequest $httpClient,
+        private GeminiRequestBuilder $builder,
         string|array $content,
         string $defaultModel
     ) {
-        $this->httpClient = $httpClient;
-        $this->builder = $builder;
         $this->content = $content;
         $this->model = $defaultModel;
     }

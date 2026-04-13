@@ -11,18 +11,52 @@ use Hibla\HttpClient\SSE\SSEEvent;
  */
 class GeminiSSEStreamer
 {
-    private array $config;
+    private string $messageEvent;
+
+    private ?string $doneEvent;
+
+    private string $errorEvent;
+
+    private ?string $progressEvent;
+
+    private bool $includeMetadata;
+
     private int $chunkCount = 0;
+
     private int $totalLength = 0;
+
     private float $startTime;
+
     private bool $completionEmitted = false;
+
+    /**
+     *  @var array<string, mixed>
+     */
+    private array $customMetadata;
+
+    /**
+     *  @var callable(string, array<string, mixed>): array<string, mixed>|null
+     */
+    private $onBeforeEmit;
 
     /**
      * @param array<string, mixed> $config SSE streaming configuration
      */
     public function __construct(array $config = [])
     {
-        $this->config = array_merge($this->getDefaultConfig(), $config);
+        $merged = [...$this->getDefaultConfig(), ...$config];
+
+        $this->messageEvent = \is_string($merged['messageEvent']) ? $merged['messageEvent'] : 'message';
+        $this->doneEvent = \is_string($merged['doneEvent']) ? $merged['doneEvent'] : null;
+        $this->errorEvent = \is_string($merged['errorEvent']) ? $merged['errorEvent'] : 'error';
+        $this->progressEvent = \is_string($merged['progressEvent']) ? $merged['progressEvent'] : null;
+        $this->includeMetadata = \is_bool($merged['includeMetadata']) ? $merged['includeMetadata'] : true;
+        $this->onBeforeEmit = \is_callable($merged['onBeforeEmit']) ? $merged['onBeforeEmit'] : null;
+
+        $rawCustomMetadata = \is_array($merged['customMetadata']) ? $merged['customMetadata'] : [];
+        /** @var array<string, mixed> $rawCustomMetadata */
+        $this->customMetadata = $rawCustomMetadata;
+
         $this->startTime = microtime(true);
     }
 
@@ -46,13 +80,10 @@ class GeminiSSEStreamer
 
     /**
      * Handle a streaming chunk.
-     *
-     * @param string $chunk
-     * @param SSEEvent $event
      */
     public function handleChunk(string $chunk, SSEEvent $event): void
     {
-        if (empty($chunk)) {
+        if ($chunk === '') {
             return;
         }
 
@@ -61,7 +92,7 @@ class GeminiSSEStreamer
 
         $this->emitMessageEvent($chunk);
 
-        if ($this->config['progressEvent'] !== null) {
+        if ($this->progressEvent !== null) {
             $this->emitProgressEvent();
         }
     }
@@ -77,15 +108,13 @@ class GeminiSSEStreamer
 
         $this->completionEmitted = true;
 
-        if ($this->config['doneEvent'] !== null) {
+        if ($this->doneEvent !== null) {
             $this->emitDoneEvent();
         }
     }
 
     /**
      * Handle stream error.
-     *
-     * @param \Throwable $error
      */
     public function handleError(\Throwable $error): void
     {
@@ -94,35 +123,34 @@ class GeminiSSEStreamer
             'message' => $error->getMessage(),
         ];
 
-        if ($this->config['onBeforeEmit'] !== null) {
-            $data = $this->config['onBeforeEmit']($this->config['errorEvent'], $data);
+        if ($this->onBeforeEmit !== null) {
+            $data = ($this->onBeforeEmit)($this->errorEvent, $data);
         }
 
-        $this->emitSSE($this->config['errorEvent'], $data);
+        $this->emitSSE($this->errorEvent, $data);
     }
 
     /**
      * Emit a message event for a chunk.
-     *
-     * @param string $chunk
      */
     private function emitMessageEvent(string $chunk): void
     {
         $data = ['content' => $chunk];
 
-        if ($this->config['includeMetadata']) {
-            $data['metadata'] = array_merge([
+        if ($this->includeMetadata) {
+            $data['metadata'] = [
                 'chunk' => $this->chunkCount,
                 'length' => strlen($chunk),
                 'totalLength' => $this->totalLength,
-            ], $this->config['customMetadata']);
+                ...$this->customMetadata,
+            ];
         }
 
-        if ($this->config['onBeforeEmit'] !== null) {
-            $data = $this->config['onBeforeEmit']($this->config['messageEvent'], $data);
+        if ($this->onBeforeEmit !== null) {
+            $data = ($this->onBeforeEmit)($this->messageEvent, $data);
         }
 
-        $this->emitSSE($this->config['messageEvent'], $data);
+        $this->emitSSE($this->messageEvent, $data);
     }
 
     /**
@@ -130,17 +158,21 @@ class GeminiSSEStreamer
      */
     private function emitProgressEvent(): void
     {
+        if ($this->progressEvent === null) {
+            return;
+        }
+
         $data = [
             'chunk' => $this->chunkCount,
             'totalChunks' => $this->chunkCount,
             'length' => $this->totalLength,
         ];
 
-        if ($this->config['onBeforeEmit'] !== null) {
-            $data = ($this->config['onBeforeEmit'])($this->config['progressEvent'], $data);
+        if ($this->onBeforeEmit !== null) {
+            $data = ($this->onBeforeEmit)($this->progressEvent, $data);
         }
 
-        $this->emitSSE($this->config['progressEvent'], $data);
+        $this->emitSSE($this->progressEvent, $data);
     }
 
     /**
@@ -148,30 +180,34 @@ class GeminiSSEStreamer
      */
     private function emitDoneEvent(): void
     {
+        if ($this->doneEvent === null) {
+            return;
+        }
+
         $duration = microtime(true) - $this->startTime;
 
         $data = ['status' => 'complete'];
 
-        if ($this->config['includeMetadata']) {
-            $data['metadata'] = array_merge([
+        if ($this->includeMetadata) {
+            $data['metadata'] = [
                 'chunks' => $this->chunkCount,
                 'length' => $this->totalLength,
                 'duration' => round($duration, 3),
-            ], $this->config['customMetadata']);
+                ...$this->customMetadata,
+            ];
         }
 
-        if ($this->config['onBeforeEmit'] !== null) {
-            $data = $this->config['onBeforeEmit']($this->config['doneEvent'], $data);
+        if ($this->onBeforeEmit !== null) {
+            $data = ($this->onBeforeEmit)($this->doneEvent, $data);
         }
 
-        $this->emitSSE($this->config['doneEvent'], $data);
+        $this->emitSSE($this->doneEvent, $data);
     }
 
     /**
      * Emit an SSE event with automatic flushing.
      *
-     * @param string $event Event name
-     * @param array<string, mixed> $data Event data
+     * @param array<string, mixed> $data
      */
     private function emitSSE(string $event, array $data): void
     {
