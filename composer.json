@@ -23,10 +23,10 @@
     "require": {
         "php": "^8.4",
         "rcalicdan/config-loader": "^1.0",
-        "hiblaphp/http-client": "dev-main"
+        "hiblaphp/http-client": "^1.0"
     },
     "require-dev": {
-        "hiblaphp/http-client-testing": "dev-main",
+        "hiblaphp/http-client-testing": "^1.0",
         "pestphp/pest": "^4.0",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-strict-rules": "^2.0",
