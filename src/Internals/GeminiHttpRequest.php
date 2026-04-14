@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Rcalicdan\GeminiClient\Internals;
 
 use Hibla\HttpClient\Interfaces\HttpClientInterface;
+use Hibla\HttpClient\Interfaces\SSEResponseInterface;
 use Hibla\HttpClient\Response;
 use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
-use Hibla\HttpClient\SSE\SSEResponse;
 use Hibla\HttpClient\ValueObjects\RetryConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Throwable;
@@ -129,7 +129,7 @@ class GeminiHttpRequest
                 }
             })
             ->connect()
-            ->then(function (SSEResponse $sseResponse) use (&$bufferedChunks, &$bufferedEvents, &$streamResponse) {
+            ->then(function (SSEResponseInterface $sseResponse) use (&$bufferedChunks, &$bufferedEvents, &$streamResponse) {
                 $streamResponse = new GeminiStreamResponse($sseResponse);
 
                 foreach ($bufferedChunks as $chunk) {
