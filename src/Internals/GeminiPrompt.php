@@ -205,7 +205,7 @@ class GeminiPrompt implements GeminiPromptInterface
             },
             $reconnectConfig
         )->then(function ($response) use ($streamer) {
-            register_shutdown_function(fn () => $streamer->handleCompletion());
+            $streamer->handleCompletion();
 
             return $response;
         })->catch(function (\Throwable $error) use ($streamer) {

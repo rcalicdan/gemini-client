@@ -11,6 +11,7 @@ use Hibla\HttpClient\SSE\SSEEvent;
 use Hibla\HttpClient\SSE\SSEReconnectConfig;
 use Hibla\HttpClient\ValueObjects\RetryConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
+use Hibla\Promise\Promise;
 use Throwable;
 
 /**
@@ -73,16 +74,12 @@ class GeminiHttpRequest
         callable $onChunk,
         SSEReconnectConfig $reconnectConfig
     ): PromiseInterface {
-        /** @var array<string> $bufferedChunks */
-        $bufferedChunks = [];
+        $context = new GeminiStreamContext();
 
-        /** @var array<SSEEvent> $bufferedEvents */
-        $bufferedEvents = [];
+        /** @var Promise<GeminiStreamResponse> $completionPromise */
+        $completionPromise = new Promise();
 
-        /** @var GeminiStreamResponse|null $streamResponse */
-        $streamResponse = null;
-
-        return $this->client
+        $connector = $this->client
             ->withMethod('POST')
             ->withJson($payload)
             ->withHeader('x-goog-api-key', $this->apiKey)
@@ -90,62 +87,65 @@ class GeminiHttpRequest
             ->timeout(120)
             ->sse($url)
             ->withReconnectConfig($reconnectConfig)
-            ->onEvent(function (mixed $event, mixed $control) use ($onChunk, &$bufferedChunks, &$bufferedEvents, &$streamResponse) {
+            ->onEvent(function (mixed $event) use ($onChunk, $context, $completionPromise) {
                 if (! $event instanceof SSEEvent) {
                     return;
                 }
 
-                if ($event->isKeepAlive()) {
-                    if ($streamResponse !== null) {
-                        $streamResponse->addEvent($event);
-                    } else {
-                        $bufferedEvents[] = $event;
+                if ($event->isKeepAlive() || $event->data === null) {
+                    if ($event->isKeepAlive()) {
+                        $context->addEvent($event);
                     }
 
                     return;
                 }
 
-                if ($event->data === null) {
-                    return;
+                $parsed = json_decode($event->data, true);
+                $finishReason = null;
+
+                if (\is_array($parsed)) {
+                    $candidates = $parsed['candidates'] ?? null;
+                    if (\is_array($candidates) && isset($candidates[0]) && \is_array($candidates[0])) {
+                        $finishReason = $candidates[0]['finishReason'] ?? null;
+                    }
                 }
 
                 $chunks = $this->builder->parseSSEData($event->data);
 
                 foreach ($chunks as $chunk) {
-                    if ($streamResponse !== null) {
-                        $streamResponse->addChunk($chunk);
-                        $streamResponse->addEvent($event);
-                    } else {
-                        $bufferedChunks[] = $chunk;
-                        $bufferedEvents[] = $event;
-                    }
-
+                    $context->addChunk($chunk);
+                    $context->addEvent($event);
                     $onChunk($chunk, $event);
                 }
-            })
-            ->onError(function (Throwable $error) use ($reconnectConfig) {
-                if ($reconnectConfig->onReconnect !== null) {
-                    error_log('SSE Error: ' . $error->getMessage());
+
+                // STOP, MAX_TOKENS, SAFETY, RECITATION all mean Gemini is done
+                if ($finishReason !== null && ! $completionPromise->isSettled()) {
+                    $completionPromise->resolve($context->getResponse());
                 }
             })
-            ->connect()
-            ->then(function (SSEResponseInterface $sseResponse) use (&$bufferedChunks, &$bufferedEvents, &$streamResponse) {
-                $streamResponse = new GeminiStreamResponse($sseResponse);
-
-                foreach ($bufferedChunks as $chunk) {
-                    $streamResponse->addChunk($chunk);
+            ->onError(function (Throwable $error) use ($completionPromise): void {
+                if (! $completionPromise->isSettled()) {
+                    $completionPromise->reject($error);
                 }
-
-                foreach ($bufferedEvents as $event) {
-                    $streamResponse->addEvent($event);
-                }
-
-                // Clear buffers to free memory
-                $bufferedChunks = [];
-                $bufferedEvents = [];
-
-                return $streamResponse;
             })
         ;
+
+        $connector
+            ->connect()
+            ->then(
+                function (SSEResponseInterface $sseResponse) use ($context) {
+                    // This fires when HTTP headers arrive. It pass it to the context
+                    // which immediately flushes any early events into the response object.
+                    $context->setResponse(new GeminiStreamResponse($sseResponse));
+                },
+                function (Throwable $error) use ($completionPromise): void {
+                    if (! $completionPromise->isSettled()) {
+                        $completionPromise->reject($error);
+                    }
+                }
+            )
+        ;
+
+        return $completionPromise;
     }
 }
